@@ -1348,7 +1348,7 @@
                             android:id="@+id/player_watch_together_btt"
                             style="@style/VideoButtonTV"
                             android:nextFocusLeft="@id/player_tracks_btt"
-                            android:nextFocusRight="@id/player_mic_btt"
+                            android:nextFocusRight="@id/player_skip_op"
                             android:nextFocusUp="@id/player_pause_play"
                             android:text="@string/watch_together"
                             app:icon="@drawable/ic_baseline_people_24" />
@@ -1356,6 +1356,8 @@
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/player_mic_btt"
                             style="@style/VideoButtonTV"
+                            android:visibility="gone"
+                            tools:visibility="gone"
                             android:nextFocusLeft="@id/player_watch_together_btt"
                             android:nextFocusRight="@id/player_skip_op"
                             android:nextFocusUp="@id/player_pause_play"

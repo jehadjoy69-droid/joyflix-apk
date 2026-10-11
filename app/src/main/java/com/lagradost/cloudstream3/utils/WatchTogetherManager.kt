@@ -147,11 +147,14 @@ object WatchTogetherManager {
     private var onVoiceCallToggledCallback: ((Boolean) -> Unit)? = null
     private var onEpisodeChangedCallback: ((Int) -> Unit)? = null
 
+    const val IS_VOICE_ENABLED: Boolean = false
+
     fun setOnChatHistoryUpdatedListener(listener: ((List<ChatMessage>) -> Unit)?) {
         onChatHistoryUpdatedCallback = listener
     }
 
     fun setOnVoiceCallToggledListener(listener: ((Boolean) -> Unit)?) {
+        if (!IS_VOICE_ENABLED) return
         onVoiceCallToggledCallback = listener
     }
 
@@ -160,6 +163,7 @@ object WatchTogetherManager {
     }
 
     fun toggleVoiceCall(active: Boolean) {
+        if (!IS_VOICE_ENABLED) return
         isVoiceCallActive = active
         onVoiceCallToggledCallback?.invoke(active)
     }
@@ -169,10 +173,12 @@ object WatchTogetherManager {
     }
 
     fun setOnNewVoiceListener(listener: ((VoiceMessage) -> Unit)?) {
+        if (!IS_VOICE_ENABLED) return
         onNewVoiceCallback = listener
     }
 
     fun sendVoiceMessage(base64Audio: String, durationMs: Long, senderNickname: String) {
+        if (!IS_VOICE_ENABLED) return
         val roomId = currentRoomId ?: return
         if (base64Audio.isBlank()) return
 
@@ -267,6 +273,7 @@ object WatchTogetherManager {
     }
 
     fun setVoiceStatus(isActive: Boolean) {
+        if (!IS_VOICE_ENABLED) return
         val roomId = currentRoomId ?: return
         ioSafe {
             try {
@@ -566,11 +573,13 @@ object WatchTogetherManager {
                                 }
                             }
 
-                            // 4. Check for incoming voice message
-                            val voice = room.lastVoice
-                            if (voice != null && voice.id != lastSeenVoiceId && voice.senderId != myUserId && voice.audioBase64.isNotBlank()) {
-                                lastSeenVoiceId = voice.id
-                                onNewVoiceCallback?.invoke(voice)
+                            // 4. Check for incoming voice message (disabled for now)
+                            if (IS_VOICE_ENABLED) {
+                                val voice = room.lastVoice
+                                if (voice != null && voice.id != lastSeenVoiceId && voice.senderId != myUserId && voice.audioBase64.isNotBlank()) {
+                                    lastSeenVoiceId = voice.id
+                                    onNewVoiceCallback?.invoke(voice)
+                                }
                             }
                         }
                     } else if (res.code == 404 && !isHost) {

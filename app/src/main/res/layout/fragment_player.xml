@@ -215,7 +215,7 @@
                     android:paddingHorizontal="14dp"
                     android:paddingVertical="7dp"
                     android:visibility="gone"
-                    tools:visibility="visible">
+                    tools:visibility="gone">
 
                     <ImageView
                         android:layout_width="16dp"

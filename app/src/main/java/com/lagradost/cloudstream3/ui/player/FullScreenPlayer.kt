@@ -945,39 +945,41 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             }
         }
 
-        val ctx = context ?: activity
-        if (ctx != null && voiceHelper == null) {
-            voiceHelper = WatchTogetherVoiceHelper(ctx.applicationContext)
-        }
+        if (WatchTogetherManager.IS_VOICE_ENABLED) {
+            val ctx = context ?: activity
+            if (ctx != null && voiceHelper == null) {
+                voiceHelper = WatchTogetherVoiceHelper(ctx.applicationContext)
+            }
 
-        WatchTogetherManager.setOnNewVoiceListener { voice ->
-            activity?.runOnUiThread {
-                if (!isAdded || isDetached) return@runOnUiThread
-                showVoiceSpeakingToast(voice.senderName)
-                if (!isDuckingVolume) {
-                    originalPlayerVolume = player.getVolume() ?: 1.0f
-                    player.setVolume(0.15f)
-                    isDuckingVolume = true
-                }
-                voiceHelper?.enqueueVoice(
-                    base64Audio = voice.audioBase64,
-                    onStart = {
-                        activity?.runOnUiThread {
-                            if (!isAdded || isDetached) return@runOnUiThread
-                            showVoiceSpeakingToast(voice.senderName)
-                        }
-                    },
-                    onAllComplete = {
-                        activity?.runOnUiThread {
-                            if (!isAdded || isDetached) return@runOnUiThread
-                            if (isDuckingVolume) {
-                                player.setVolume(originalPlayerVolume)
-                                isDuckingVolume = false
-                            }
-                            hideVoiceSpeakingToast()
-                        }
+            WatchTogetherManager.setOnNewVoiceListener { voice ->
+                activity?.runOnUiThread {
+                    if (!isAdded || isDetached) return@runOnUiThread
+                    showVoiceSpeakingToast(voice.senderName)
+                    if (!isDuckingVolume) {
+                        originalPlayerVolume = player.getVolume() ?: 1.0f
+                        player.setVolume(0.15f)
+                        isDuckingVolume = true
                     }
-                )
+                    voiceHelper?.enqueueVoice(
+                        base64Audio = voice.audioBase64,
+                        onStart = {
+                            activity?.runOnUiThread {
+                                if (!isAdded || isDetached) return@runOnUiThread
+                                showVoiceSpeakingToast(voice.senderName)
+                            }
+                        },
+                        onAllComplete = {
+                            activity?.runOnUiThread {
+                                if (!isAdded || isDetached) return@runOnUiThread
+                                if (isDuckingVolume) {
+                                    player.setVolume(originalPlayerVolume)
+                                    isDuckingVolume = false
+                                }
+                                hideVoiceSpeakingToast()
+                            }
+                        }
+                    )
+                }
             }
         }
 
@@ -1080,6 +1082,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
     private var originalPlayerVolume = 1.0f
 
     private fun showVoiceSpeakingToast(speakerName: String) {
+        if (!WatchTogetherManager.IS_VOICE_ENABLED) return
         val b = playerBinding ?: return
         hideVoiceToastRunnable?.let { b.playerVoiceToastContainer.removeCallbacks(it) }
 
@@ -1349,43 +1352,47 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 // Host button
                 binding.btnHostStartPlay.isVisible = WatchTogetherManager.isHost
 
-                binding.layoutDialogVoice.isVisible = true
-                setupUnifiedMicButton(binding.btnDialogMic)
-                binding.layoutDialogVoice.setOnClickListener {
-                    binding.btnDialogMic.performClick()
-                }
-
-                val updateDialogVoiceUI: (Boolean) -> Unit = { isMicOn ->
-                    if (isMicOn) {
-                        binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#33FF3344"))
-                        binding.iconDialogVoice.setColorFilter(Color.parseColor("#FF3344"))
-                        binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_24)
-                        binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
-                        binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_status_live)
-                        binding.tvDialogVoiceSubtitle.setTextColor(Color.parseColor("#4CAF50"))
-                        binding.btnDialogMic.text = getString(R.string.mic_on)
-                        binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_24)
-                        binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF3344"))
-                        binding.btnDialogMic.setTextColor(Color.WHITE)
-                        binding.btnDialogMic.iconTint = ColorStateList.valueOf(Color.WHITE)
-                    } else {
-                        binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#26FFFFFF"))
-                        binding.iconDialogVoice.setColorFilter(Color.WHITE)
-                        binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_off_24)
-                        binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
-                        binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_hold_to_talk)
-                        val grayColor = act.colorFromAttribute(R.attr.grayTextColor) ?: Color.GRAY
-                        binding.tvDialogVoiceSubtitle.setTextColor(grayColor)
-                        binding.btnDialogMic.text = getString(R.string.voice_turn_on)
-                        binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_off_24)
-                        binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.WHITE)
-                        val darkColor = Color.parseColor("#1C1C1E")
-                        binding.btnDialogMic.setTextColor(darkColor)
-                        binding.btnDialogMic.iconTint = ColorStateList.valueOf(darkColor)
+                if (WatchTogetherManager.IS_VOICE_ENABLED) {
+                    binding.layoutDialogVoice.isVisible = true
+                    setupUnifiedMicButton(binding.btnDialogMic)
+                    binding.layoutDialogVoice.setOnClickListener {
+                        binding.btnDialogMic.performClick()
                     }
+
+                    val updateDialogVoiceUI: (Boolean) -> Unit = { isMicOn ->
+                        if (isMicOn) {
+                            binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#33FF3344"))
+                            binding.iconDialogVoice.setColorFilter(Color.parseColor("#FF3344"))
+                            binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_24)
+                            binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
+                            binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_status_live)
+                            binding.tvDialogVoiceSubtitle.setTextColor(Color.parseColor("#4CAF50"))
+                            binding.btnDialogMic.text = getString(R.string.mic_on)
+                            binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_24)
+                            binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF3344"))
+                            binding.btnDialogMic.setTextColor(Color.WHITE)
+                            binding.btnDialogMic.iconTint = ColorStateList.valueOf(Color.WHITE)
+                        } else {
+                            binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#26FFFFFF"))
+                            binding.iconDialogVoice.setColorFilter(Color.WHITE)
+                            binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_off_24)
+                            binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
+                            binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_hold_to_talk)
+                            val grayColor = act.colorFromAttribute(R.attr.grayTextColor) ?: Color.GRAY
+                            binding.tvDialogVoiceSubtitle.setTextColor(grayColor)
+                            binding.btnDialogMic.text = getString(R.string.voice_turn_on)
+                            binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_off_24)
+                            binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.WHITE)
+                            val darkColor = Color.parseColor("#1C1C1E")
+                            binding.btnDialogMic.setTextColor(darkColor)
+                            binding.btnDialogMic.iconTint = ColorStateList.valueOf(darkColor)
+                        }
+                    }
+                    currentDialogVoiceUpdater = updateDialogVoiceUI
+                    updateDialogVoiceUI(voiceHelper?.isLiveMicOn == true)
+                } else {
+                    binding.layoutDialogVoice.isGone = true
                 }
-                currentDialogVoiceUpdater = updateDialogVoiceUI
-                updateDialogVoiceUI(voiceHelper?.isLiveMicOn == true)
             } else {
                 binding.layoutNotInRoom.isVisible = true
                 binding.layoutInRoom.isVisible = false
@@ -1686,8 +1693,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             if (isGone && playerChatBarContainer.isVisible) {
                 playerChatBarContainer.isVisible = false
             }
-            playerMicBtt.isVisible = !isGone
-            playerFloatingMicContainer.isVisible = !isGone && WatchTogetherManager.isInRoom
+            playerMicBtt.isVisible = !isGone && WatchTogetherManager.IS_VOICE_ENABLED
+            playerFloatingMicContainer.isVisible = !isGone && WatchTogetherManager.isInRoom && WatchTogetherManager.IS_VOICE_ENABLED
             shadowOverlay.isGone = isGone
             playerSkipEpisode.isClickable = !isGone
         }
@@ -2271,9 +2278,15 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             btnQuickEmojiThumbsup.setOnClickListener { sendCurrentChatMessage("👍") }
             btnQuickEmojiParty.setOnClickListener { sendCurrentChatMessage("🎉") }
 
-            setupUnifiedMicButton(playerMicBtt)
-            setupUnifiedMicButton(btnSidebarMic)
-            setupDraggableFloatingMic(playerFloatingMicContainer, playerFloatingMic)
+            if (WatchTogetherManager.IS_VOICE_ENABLED) {
+                setupUnifiedMicButton(playerMicBtt)
+                setupUnifiedMicButton(btnSidebarMic)
+                setupDraggableFloatingMic(playerFloatingMicContainer, playerFloatingMic)
+            } else {
+                playerMicBtt.isGone = true
+                btnSidebarMic.isGone = true
+                playerFloatingMicContainer.isGone = true
+            }
 
 
 
@@ -2533,16 +2546,20 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
 
         updatePortraitRoomTabs()
 
-        WatchTogetherManager.setOnMembersUpdatedListener { members ->
-            activity?.runOnUiThread {
-                val speakingMember = members.firstOrNull { it.voiceActive && it.userId != WatchTogetherManager.myUserId }
-                if (speakingMember != null) {
-                    binding?.tvPortraitVoiceSpeakingUser?.text = "${speakingMember.name} is talking..."
-                    binding?.layoutPortraitVoiceSpeakingIndicator?.isVisible = true
-                } else if (voiceHelper?.isLiveMicOn != true) {
-                    binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
+        if (WatchTogetherManager.IS_VOICE_ENABLED) {
+            WatchTogetherManager.setOnMembersUpdatedListener { members ->
+                activity?.runOnUiThread {
+                    val speakingMember = members.firstOrNull { it.voiceActive && it.userId != WatchTogetherManager.myUserId }
+                    if (speakingMember != null) {
+                        binding?.tvPortraitVoiceSpeakingUser?.text = "${speakingMember.name} is talking..."
+                        binding?.layoutPortraitVoiceSpeakingIndicator?.isVisible = true
+                    } else if (voiceHelper?.isLiveMicOn != true) {
+                        binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
+                    }
                 }
             }
+        } else {
+            binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
         }
 
         WatchTogetherManager.setOnChatHistoryUpdatedListener { history ->
