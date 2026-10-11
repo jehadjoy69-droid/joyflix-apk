@@ -77,23 +77,35 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
             return@setOnPreferenceClickListener true
         }
 
-        getPref(R.string.prefer_limit_title_key)?.setOnPreferenceClickListener {
+        getPref(R.string.prefer_limit_title_key)?.let { pref ->
             val prefNames = resources.getStringArray(R.array.limit_title_pref_names)
             val prefValues = resources.getIntArray(R.array.limit_title_pref_values)
-            val current = settingsManager.getInt(getString(R.string.prefer_limit_title_key), 0)
 
-            activity?.showBottomDialog(
-                prefNames.toList(),
-                prefValues.indexOf(current),
-                getString(R.string.limit_title),
-                true,
-                {}
-            ) {
-                settingsManager.edit {
-                    putInt(getString(R.string.prefer_limit_title_key), prefValues[it])
+            fun updateSummary() {
+                val current = settingsManager.getInt(getString(R.string.prefer_limit_title_key), 0)
+                val idx = prefValues.indexOf(current)
+                if (idx in prefNames.indices) {
+                    pref.summary = prefNames[idx]
                 }
             }
-            return@setOnPreferenceClickListener true
+            updateSummary()
+
+            pref.setOnPreferenceClickListener {
+                val current = settingsManager.getInt(getString(R.string.prefer_limit_title_key), 0)
+                activity?.showBottomDialog(
+                    prefNames.toList(),
+                    maxOf(0, prefValues.indexOf(current)),
+                    getString(R.string.limit_title),
+                    true,
+                    {}
+                ) {
+                    settingsManager.edit {
+                        putInt(getString(R.string.prefer_limit_title_key), prefValues[it])
+                    }
+                    updateSummary()
+                }
+                return@setOnPreferenceClickListener true
+            }
         }
 
         getPref(R.string.software_decoding_key)?.setOnPreferenceClickListener {
@@ -103,7 +115,7 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
 
             activity?.showBottomDialog(
                 prefNames.toList(),
-                prefValues.indexOf(current),
+                maxOf(0, prefValues.indexOf(current)),
                 getString(R.string.software_decoding),
                 true,
                 {}
@@ -115,9 +127,8 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
             return@setOnPreferenceClickListener true
         }
 
-        getPref(R.string.prefer_limit_show_player_info)?.setOnPreferenceClickListener {
-            val ctx = context ?: return@setOnPreferenceClickListener false
-
+        getPref(R.string.prefer_limit_show_player_info)?.let { pref ->
+            val ctx = context ?: return@let
             val prefNames = resources.getStringArray(R.array.title_info_pref_names)
             val keys = resources.getStringArray(R.array.title_info_pref_values)
 
@@ -128,26 +139,36 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
                 ctx.getString(R.string.show_media_info_key) to false
             )
 
-            val selectedIndices = keys.map { key ->
-                settingsManager.getBoolean(key, playerDefaults[key] ?: false)
-            }.mapIndexedNotNull { index, enabled ->
-                if (enabled) index else null
-            }
-
-            activity?.showMultiDialog(
-                prefNames.toList(),
-                selectedIndices,
-                getString(R.string.limit_title_rez),
-                {}
-            ) { selected ->
-                settingsManager.edit {
-                    for ((index, key) in keys.withIndex()) {
-                        putBoolean(key, selected.contains(index))
-                    }
+            fun updateSummary() {
+                val selected = keys.mapIndexedNotNull { index, key ->
+                    if (settingsManager.getBoolean(key, playerDefaults[key] ?: false)) prefNames[index] else null
                 }
+                pref.summary = if (selected.isEmpty()) getString(R.string.none) else selected.joinToString(", ")
             }
+            updateSummary()
 
-            true
+            pref.setOnPreferenceClickListener {
+                val selectedIndices = keys.map { key ->
+                    settingsManager.getBoolean(key, playerDefaults[key] ?: false)
+                }.mapIndexedNotNull { index, enabled ->
+                    if (enabled) index else null
+                }
+
+                activity?.showMultiDialog(
+                    prefNames.toList(),
+                    selectedIndices,
+                    getString(R.string.limit_title_rez),
+                    {}
+                ) { selected ->
+                    settingsManager.edit {
+                        for ((index, key) in keys.withIndex()) {
+                            putBoolean(key, selected.contains(index))
+                        }
+                    }
+                    updateSummary()
+                }
+                true
+            }
         }
 
         getPref(R.string.hide_player_control_names_key)?.hideOn(TV)
@@ -212,13 +233,15 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
             }
 
             val prefNames = buildList {
-                add(getString(R.string.player_settings_play_in_app)) // built-in player display name
-                addAll(players.map { (_, name) -> name })
+                add(getString(R.string.episode_action_play_mirror)) // Select stream source
+                add(getString(R.string.player_settings_play_in_app)) // Auto play
+                addAll(players.filter { it.first.uniqueId() != "PlayMirrorAction" }.map { (_, name) -> name })
             }
 
             val prefValues = buildList {
-                add("") // "" = built-in player, matches default
-                addAll(players.map { (player, _) -> player.uniqueId() })
+                add("") // "" defaults to PlayMirrorAction (Select stream source)
+                add("AutoPlay")
+                addAll(players.filter { it.first.uniqueId() != "PlayMirrorAction" }.map { (player, _) -> player.uniqueId() })
             }
 
             val current = settingsManager.getString(getString(R.string.player_default_key), "") ?: ""

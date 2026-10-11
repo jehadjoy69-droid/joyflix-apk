@@ -87,7 +87,17 @@ class EpisodeAdapter(
             val playerPref =
                 settingsManager.getString(context.getString(R.string.player_default_key), "")
 
-            return VideoClickActionHolder.uniqueIdToId(playerPref) ?: ACTION_PLAY_EPISODE_IN_PLAYER
+            if (playerPref.isNullOrBlank()) {
+                return VideoClickActionHolder.uniqueIdToId("PlayMirrorAction")
+                    ?: ACTION_PLAY_EPISODE_IN_PLAYER
+            }
+            if (playerPref == "AutoPlay") {
+                return ACTION_PLAY_EPISODE_IN_PLAYER
+            }
+
+            return VideoClickActionHolder.uniqueIdToId(playerPref)
+                ?: VideoClickActionHolder.uniqueIdToId("PlayMirrorAction")
+                ?: ACTION_PLAY_EPISODE_IN_PLAYER
         }
 
         val sharedPool =

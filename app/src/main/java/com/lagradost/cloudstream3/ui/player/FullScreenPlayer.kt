@@ -14,9 +14,14 @@ import android.view.inputmethod.InputMethodManager
 import android.content.res.ColorStateList
 import android.content.res.Configuration
 import android.graphics.Color
+import android.graphics.Typeface
 import android.os.Build
 import android.os.Bundle
 import android.text.Editable
+import android.text.SpannableStringBuilder
+import android.text.Spanned
+import android.text.style.ForegroundColorSpan
+import android.text.style.StyleSpan
 import android.view.KeyEvent
 import android.view.LayoutInflater
 import android.view.MotionEvent
@@ -91,7 +96,9 @@ import kotlin.math.roundToInt
 
 private const val SUBTITLE_DELAY_BUNDLE_KEY = "subtitle_delay"
 
-class PortraitChatAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<PortraitChatAdapter.ViewHolder>() {
+class PortraitChatAdapter(
+    var onReplyClicked: ((WatchTogetherManager.ChatMessage) -> Unit)? = null
+) : androidx.recyclerview.widget.RecyclerView.Adapter<PortraitChatAdapter.ViewHolder>() {
     private var items: List<WatchTogetherManager.ChatMessage> = emptyList()
 
     fun submitList(newItems: List<WatchTogetherManager.ChatMessage>) {
@@ -115,20 +122,84 @@ class PortraitChatAdapter : androidx.recyclerview.widget.RecyclerView.Adapter<Po
 
     override fun onBindViewHolder(holder: ViewHolder, position: Int) {
         val item = items[position]
-        holder.itemBinding.tvChatSender.text = "${item.senderName}:"
-        holder.itemBinding.tvChatText.text = item.text
-        try {
-            val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(item.timestamp))
-            holder.itemBinding.tvChatTime.text = timeStr
-        } catch (_: Exception) {
-            holder.itemBinding.tvChatTime.text = ""
+        val b = holder.itemBinding
+
+        // 1. Avatar Initial & Background Color
+        val initial = item.senderName.trim().firstOrNull()?.uppercaseChar()?.toString() ?: "U"
+        b.tvChatAvatarInitial.text = initial
+
+        val avatarColors = intArrayOf(
+            0xFF3B82F6.toInt(), // Blue
+            0xFF10B981.toInt(), // Green
+            0xFF8B5CF6.toInt(), // Purple
+            0xFFEC4899.toInt(), // Pink
+            0xFFF59E0B.toInt(), // Amber
+            0xFF06B6D4.toInt(), // Cyan
+            0xFFEF4444.toInt(), // Red
+            0xFF6366F1.toInt()  // Indigo
+        )
+        val colorIdx = (item.senderName.hashCode() and 0x7FFFFFFF) % avatarColors.size
+        b.viewChatAvatarBg.backgroundTintList = ColorStateList.valueOf(avatarColors[colorIdx])
+
+        // 2. Sender Name & Host Badge
+        b.tvChatSender.text = item.senderName
+        val hostName = WatchTogetherManager.currentRoom?.hostName
+        val isHost = !hostName.isNullOrBlank() && item.senderName == hostName
+        b.tvChatRoleBadge.isVisible = isHost
+        if (isHost) {
+            b.tvChatRoleBadge.text = "HOST"
+            b.tvChatSender.setTextColor(0xFFF59E0B.toInt()) // Gold
+        } else {
+            b.tvChatSender.setTextColor(0xFF58A6FF.toInt()) // Blue accent
         }
 
-        val hostName = WatchTogetherManager.currentRoom?.hostName
-        if (!hostName.isNullOrBlank() && item.senderName == hostName) {
-            holder.itemBinding.tvChatSender.setTextColor(0xFFF59E0B.toInt()) // Gold for host
+        // 3. Highlight @Mentions in message text
+        val rawText = item.text
+        if (rawText.contains("@")) {
+            val spannable = SpannableStringBuilder(rawText)
+            val regex = Regex("@[a-zA-Z0-9_]+")
+            for (match in regex.findAll(rawText)) {
+                spannable.setSpan(
+                    ForegroundColorSpan(0xFF58A6FF.toInt()),
+                    match.range.first,
+                    match.range.last + 1,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+                spannable.setSpan(
+                    StyleSpan(Typeface.BOLD),
+                    match.range.first,
+                    match.range.last + 1,
+                    Spanned.SPAN_EXCLUSIVE_EXCLUSIVE
+                )
+            }
+            b.tvChatText.text = spannable
         } else {
-            holder.itemBinding.tvChatSender.setTextColor(0xFF3B82F6.toInt()) // Blue
+            b.tvChatText.text = rawText
+        }
+
+        // 4. Reply Quote Box
+        if (!item.replyToName.isNullOrBlank()) {
+            b.layoutChatReplyQuote.isVisible = true
+            b.tvChatReplyTarget.text = "↩ Replying to @${item.replyToName}"
+            b.tvChatReplySnippet.text = item.replyToText ?: ""
+        } else {
+            b.layoutChatReplyQuote.isGone = true
+        }
+
+        // 5. Timestamp
+        try {
+            val timeStr = SimpleDateFormat("HH:mm", Locale.getDefault()).format(Date(item.timestamp))
+            b.tvChatTime.text = timeStr
+        } catch (_: Exception) {
+            b.tvChatTime.text = ""
+        }
+
+        // 6. Reply Action Listeners
+        b.btnChatReply.setOnClickListener {
+            onReplyClicked?.invoke(item)
+        }
+        b.layoutChatBubble.setOnClickListener {
+            onReplyClicked?.invoke(item)
         }
     }
 }
@@ -1022,6 +1093,11 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             .setDuration(200)
             .start()
 
+        binding?.let { pb ->
+            pb.tvPortraitVoiceSpeakingUser.text = "$speakerName is talking..."
+            pb.layoutPortraitVoiceSpeakingIndicator.isVisible = true
+        }
+
         val runnable = Runnable {
             b.playerVoiceToastContainer.animate()
                 .alpha(0f)
@@ -1030,6 +1106,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                     b.playerVoiceToastContainer.isVisible = false
                 }
                 .start()
+            binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
         }
         hideVoiceToastRunnable = runnable
         b.playerVoiceToastContainer.postDelayed(runnable, 3500L)
@@ -1045,6 +1122,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 b.playerVoiceToastContainer.isVisible = false
             }
             .start()
+        binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
     }
 
     private var currentDialogVoiceUpdater: ((Boolean) -> Unit)? = null
@@ -1062,6 +1140,11 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             b.playerFloatingMic.backgroundTintList = ColorStateList.valueOf(activeColor)
             b.playerFloatingMic.setImageResource(R.drawable.ic_baseline_mic_24)
             b.playerFloatingMicContainer.animate().alpha(0.85f).setDuration(150).start()
+            binding?.let { pb ->
+                val myNick = context?.let { WatchTogetherManager.getSavedNickname(it) }?.ifBlank { "You" } ?: "You"
+                pb.tvPortraitVoiceSpeakingUser.text = "$myNick (You) are talking..."
+                pb.layoutPortraitVoiceSpeakingIndicator.isVisible = true
+            }
         } else {
             val whiteColor = ContextCompat.getColor(b.root.context, R.color.white)
             b.playerMicBtt.iconTint = ColorStateList.valueOf(whiteColor)
@@ -1073,6 +1156,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             b.playerFloatingMic.backgroundTintList = ColorStateList.valueOf(primaryColor)
             b.playerFloatingMic.setImageResource(R.drawable.ic_baseline_mic_off_24)
             b.playerFloatingMicContainer.animate().alpha(0.55f).setDuration(150).start()
+            binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
         }
     }
 
@@ -1591,6 +1675,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             playerEpisodesButton.isVisible = showPlayerEpisodes
             playerVideoTitleHolder.isGone = togglePlayerTitleGone || playerVideoTitle.text.isBlank()
             playerVideoTitleRez.isGone = isGone || playerVideoTitleRez.text.isBlank()
+            playerVideoInfo.isGone = isGone || playerVideoInfo.text.isBlank()
             playerEpisodeFiller.isGone = isGone
             playerCenterMenu.isGone = isGone
             playerLock.isGone = true
@@ -1723,7 +1808,11 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
 
     override fun onConfigurationChanged(newConfig: Configuration) {
         super.onConfigurationChanged(newConfig)
-        updatePortraitLayoutMode(newConfig.orientation)
+        try {
+            updatePortraitLayoutMode(newConfig.orientation)
+        } catch (e: Exception) {
+            logError(e)
+        }
 
         // If we rotate the device we need to recalculate the zoom
         val gh = playerHostView?.gestureHelper ?: return
@@ -2140,7 +2229,21 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 }
             }
 
-            fullscreenChatAdapter = PortraitChatAdapter()
+            fullscreenChatAdapter = PortraitChatAdapter(
+                onReplyClicked = { msg ->
+                    playerBinding?.apply {
+                        val currentText = etPlayerChatInput.text?.toString() ?: ""
+                        val mention = "@${msg.senderName} "
+                        if (!currentText.startsWith(mention)) {
+                            etPlayerChatInput.setText("$mention$currentText")
+                            etPlayerChatInput.setSelection(etPlayerChatInput.text?.length ?: 0)
+                        }
+                        etPlayerChatInput.requestFocus()
+                        val imm = context?.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+                        imm?.showSoftInput(etPlayerChatInput, InputMethodManager.SHOW_IMPLICIT)
+                    }
+                }
+            )
             rvSidebarChatMessages.adapter = fullscreenChatAdapter
             btnSidebarChatClose.setOnClickListener {
                 toggleChatBar(forceShow = false)
@@ -2229,80 +2332,93 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         val currentOrientation = newOrientation ?: ctx.resources.configuration.orientation
         val isPortrait = currentOrientation == Configuration.ORIENTATION_PORTRAIT
 
-        val constraintSet = ConstraintSet()
-        constraintSet.clone(b.playerBackground)
+        try {
+            // ConstraintSet requires all children of ConstraintLayout to have IDs.
+            // If any view (e.g. injected dynamically by OS overlays or transitions) lacks an ID, generate one.
+            for (i in 0 until b.playerBackground.childCount) {
+                val child = b.playerBackground.getChildAt(i)
+                if (child.id == View.NO_ID) {
+                    child.id = View.generateViewId()
+                }
+            }
 
-        val scrim = playerBinding?.root?.findViewById<View>(R.id.player_metadata_scrim)
-        val overlayLayout = playerBinding?.root?.findViewById<LinearLayout>(R.id.player_metadata_overlay)
-        val logoView = playerBinding?.root?.findViewById<ImageView>(R.id.player_movie_logo)
-        val logoHolder = logoView?.parent as? FrameLayout
-        val titleView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_title)
-        val metaView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_meta)
-        val overviewView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_overview)
+            val constraintSet = ConstraintSet()
+            constraintSet.clone(b.playerBackground)
 
-        if (isPortrait) {
-            // Video player at top (16:9 ratio, YouTube style)
-            constraintSet.clear(R.id.player_view, ConstraintSet.BOTTOM)
-            constraintSet.connect(R.id.player_view, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
-            constraintSet.connect(R.id.player_view, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
-            constraintSet.connect(R.id.player_view, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
-            constraintSet.setDimensionRatio(R.id.player_view, "16:9")
-            constraintSet.constrainHeight(R.id.player_view, 0)
-            constraintSet.constrainWidth(R.id.player_view, ConstraintSet.MATCH_CONSTRAINT)
+            val scrim = playerBinding?.root?.findViewById<View>(R.id.player_metadata_scrim)
+            val overlayLayout = playerBinding?.root?.findViewById<LinearLayout>(R.id.player_metadata_overlay)
+            val logoView = playerBinding?.root?.findViewById<ImageView>(R.id.player_movie_logo)
+            val logoHolder = logoView?.parent as? FrameLayout
+            val titleView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_title)
+            val metaView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_meta)
+            val overviewView = playerBinding?.root?.findViewById<TextView>(R.id.player_movie_overview)
 
-            // Bottom container takes remaining screen space
-            constraintSet.clear(R.id.portrait_bottom_container)
-            constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.TOP, R.id.player_view, ConstraintSet.BOTTOM)
-            constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
-            constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
-            constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
-            constraintSet.constrainHeight(R.id.portrait_bottom_container, 0)
-            constraintSet.constrainWidth(R.id.portrait_bottom_container, ConstraintSet.MATCH_CONSTRAINT)
-            constraintSet.setVisibility(R.id.portrait_bottom_container, View.VISIBLE)
+            if (isPortrait) {
+                // Video player at top (16:9 ratio, YouTube style)
+                constraintSet.clear(R.id.player_view, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.player_view, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.player_view, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.player_view, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.setDimensionRatio(R.id.player_view, "16:9")
+                constraintSet.constrainHeight(R.id.player_view, 0)
+                constraintSet.constrainWidth(R.id.player_view, ConstraintSet.MATCH_CONSTRAINT)
 
-            playerBinding?.playerHorizontalEpisodesContainer?.isGone = true
-            populatePortraitEpisodes()
+                // Bottom container takes remaining screen space
+                constraintSet.clear(R.id.portrait_bottom_container)
+                constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.TOP, R.id.player_view, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.portrait_bottom_container, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.constrainHeight(R.id.portrait_bottom_container, 0)
+                constraintSet.constrainWidth(R.id.portrait_bottom_container, ConstraintSet.MATCH_CONSTRAINT)
+                constraintSet.setVisibility(R.id.portrait_bottom_container, View.VISIBLE)
 
-            // Scale down pause overlay metadata for compact 16:9 portrait player
-            scrim?.layoutParams?.width = ViewGroup.LayoutParams.MATCH_PARENT
-            overlayLayout?.setPaddingRelative(16.toPx, overlayLayout.paddingTop, 16.toPx, 8.toPx)
-            logoHolder?.layoutParams?.height = 48.toPx
-            logoHolder?.requestLayout()
-            logoView?.maxWidth = 180.toPx
-            titleView?.textSize = 18f
-            metaView?.textSize = 11f
-            (metaView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 4.toPx
-            overviewView?.textSize = 11f
-            overviewView?.maxLines = 2
-            (overviewView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 4.toPx
-        } else {
-            // Fullscreen landscape
-            constraintSet.clear(R.id.player_view)
-            constraintSet.connect(R.id.player_view, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
-            constraintSet.connect(R.id.player_view, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
-            constraintSet.connect(R.id.player_view, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
-            constraintSet.connect(R.id.player_view, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
-            constraintSet.setDimensionRatio(R.id.player_view, null)
-            constraintSet.constrainHeight(R.id.player_view, 0)
-            constraintSet.constrainWidth(R.id.player_view, ConstraintSet.MATCH_CONSTRAINT)
+                playerBinding?.playerHorizontalEpisodesContainer?.isGone = true
+                populatePortraitEpisodes()
 
-            constraintSet.setVisibility(R.id.portrait_bottom_container, View.GONE)
+                // Scale down pause overlay metadata for compact 16:9 portrait player
+                scrim?.layoutParams?.width = ViewGroup.LayoutParams.MATCH_PARENT
+                overlayLayout?.setPaddingRelative(16.toPx, overlayLayout.paddingTop, 16.toPx, 8.toPx)
+                logoHolder?.layoutParams?.height = 48.toPx
+                logoHolder?.requestLayout()
+                logoView?.maxWidth = 180.toPx
+                titleView?.textSize = 18f
+                metaView?.textSize = 11f
+                (metaView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 4.toPx
+                overviewView?.textSize = 11f
+                overviewView?.maxLines = 2
+                (overviewView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 4.toPx
+            } else {
+                // Fullscreen landscape
+                constraintSet.clear(R.id.player_view)
+                constraintSet.connect(R.id.player_view, ConstraintSet.TOP, ConstraintSet.PARENT_ID, ConstraintSet.TOP)
+                constraintSet.connect(R.id.player_view, ConstraintSet.BOTTOM, ConstraintSet.PARENT_ID, ConstraintSet.BOTTOM)
+                constraintSet.connect(R.id.player_view, ConstraintSet.START, ConstraintSet.PARENT_ID, ConstraintSet.START)
+                constraintSet.connect(R.id.player_view, ConstraintSet.END, ConstraintSet.PARENT_ID, ConstraintSet.END)
+                constraintSet.setDimensionRatio(R.id.player_view, null)
+                constraintSet.constrainHeight(R.id.player_view, 0)
+                constraintSet.constrainWidth(R.id.player_view, ConstraintSet.MATCH_CONSTRAINT)
 
-            // Restore cinematic size in landscape
-            scrim?.layoutParams?.width = 640.toPx
-            overlayLayout?.setPaddingRelative(56.toPx, overlayLayout.paddingTop, 32.toPx, 24.toPx)
-            logoHolder?.layoutParams?.height = 140.toPx
-            logoHolder?.requestLayout()
-            logoView?.maxWidth = 480.toPx
-            titleView?.textSize = 36f
-            metaView?.textSize = 14f
-            (metaView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 12.toPx
-            overviewView?.textSize = 14f
-            overviewView?.maxLines = 3
-            (overviewView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 12.toPx
+                constraintSet.setVisibility(R.id.portrait_bottom_container, View.GONE)
+
+                // Restore cinematic size in landscape
+                scrim?.layoutParams?.width = 640.toPx
+                overlayLayout?.setPaddingRelative(56.toPx, overlayLayout.paddingTop, 32.toPx, 24.toPx)
+                logoHolder?.layoutParams?.height = 140.toPx
+                logoHolder?.requestLayout()
+                logoView?.maxWidth = 480.toPx
+                titleView?.textSize = 36f
+                metaView?.textSize = 14f
+                (metaView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 12.toPx
+                overviewView?.textSize = 14f
+                overviewView?.maxLines = 3
+                (overviewView?.layoutParams as? ViewGroup.MarginLayoutParams)?.topMargin = 12.toPx
+            }
+
+            constraintSet.applyTo(b.playerBackground)
+        } catch (e: Exception) {
+            logError(e)
         }
-
-        constraintSet.applyTo(b.playerBackground)
     }
 
     open fun populatePortraitEpisodes() {}
@@ -2330,7 +2446,37 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         val b = binding ?: return
         if (isLayout(TV or EMULATOR)) return
 
-        portraitChatAdapter = PortraitChatAdapter()
+        var portraitReplyTargetName: String? = null
+        var portraitReplyTargetText: String? = null
+
+        fun setReplyTarget(targetName: String, targetText: String) {
+            portraitReplyTargetName = targetName
+            portraitReplyTargetText = targetText
+            b.tvPortraitChatReplyingTo.text = "Replying to @$targetName: \"$targetText\""
+            b.layoutPortraitChatReplyBar.isVisible = true
+
+            val currentInput = b.etPortraitChatInput.text?.toString() ?: ""
+            val mentionPrefix = "@$targetName "
+            if (!currentInput.startsWith(mentionPrefix)) {
+                b.etPortraitChatInput.setText("$mentionPrefix$currentInput")
+                b.etPortraitChatInput.setSelection(b.etPortraitChatInput.text?.length ?: 0)
+            }
+            b.etPortraitChatInput.requestFocus()
+            val imm = context?.getSystemService(Context.INPUT_METHOD_SERVICE) as? InputMethodManager
+            imm?.showSoftInput(b.etPortraitChatInput, InputMethodManager.SHOW_IMPLICIT)
+        }
+
+        b.btnPortraitChatCancelReply.setOnClickListener {
+            portraitReplyTargetName = null
+            portraitReplyTargetText = null
+            b.layoutPortraitChatReplyBar.isGone = true
+        }
+
+        portraitChatAdapter = PortraitChatAdapter(
+            onReplyClicked = { msg ->
+                setReplyTarget(msg.senderName, msg.text)
+            }
+        )
         b.rvPortraitChatMessages.adapter = portraitChatAdapter
 
         fun selectTab(isEpisodes: Boolean) {
@@ -2361,8 +2507,16 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             val text = b.etPortraitChatInput.text?.toString()?.trim() ?: ""
             if (text.isNotEmpty()) {
                 val nick = context?.let { ctx -> WatchTogetherManager.getSavedNickname(ctx) }?.ifBlank { "User" } ?: "User"
-                WatchTogetherManager.sendMessage(text, nick)
+                WatchTogetherManager.sendMessage(
+                    text = text,
+                    senderNickname = nick,
+                    replyToName = portraitReplyTargetName,
+                    replyToText = portraitReplyTargetText
+                )
                 b.etPortraitChatInput.setText("")
+                portraitReplyTargetName = null
+                portraitReplyTargetText = null
+                b.layoutPortraitChatReplyBar.isGone = true
             }
         }
 
@@ -2378,6 +2532,18 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         }
 
         updatePortraitRoomTabs()
+
+        WatchTogetherManager.setOnMembersUpdatedListener { members ->
+            activity?.runOnUiThread {
+                val speakingMember = members.firstOrNull { it.voiceActive && it.userId != WatchTogetherManager.myUserId }
+                if (speakingMember != null) {
+                    binding?.tvPortraitVoiceSpeakingUser?.text = "${speakingMember.name} is talking..."
+                    binding?.layoutPortraitVoiceSpeakingIndicator?.isVisible = true
+                } else if (voiceHelper?.isLiveMicOn != true) {
+                    binding?.layoutPortraitVoiceSpeakingIndicator?.isGone = true
+                }
+            }
+        }
 
         WatchTogetherManager.setOnChatHistoryUpdatedListener { history ->
             activity?.runOnUiThread {
@@ -2404,19 +2570,19 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
     }
 
     private fun PlayerCustomLayoutBinding.hideControlsNames() {
-        fun iterate(layout: LinearLayout) {
+        fun iterate(layout: ViewGroup) {
             layout.children.forEach {
                 if (it is MaterialButton) {
                     it.textSize = 0f
                     it.iconPadding = 0
                     it.iconGravity = MaterialButton.ICON_GRAVITY_TEXT_START
                     it.setPadding(0, 0, 0, 0)
-                } else if (it is LinearLayout) {
+                } else if (it is ViewGroup) {
                     iterate(it)
                 }
             }
         }
-        iterate(playerLockHolder.parent as LinearLayout)
+        (playerLockHolder.parent as? ViewGroup)?.let { iterate(it) }
     }
 
     override fun playerDimensionsLoaded(width: Int, height: Int) {

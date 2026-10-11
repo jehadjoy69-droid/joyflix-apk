@@ -67,6 +67,7 @@ import com.jaredrummler.android.colorpicker.ColorPickerDialogListener
 import com.lagradost.cloudstream3.APIHolder.allProviders
 import com.lagradost.cloudstream3.APIHolder.apis
 import com.lagradost.cloudstream3.APIHolder.initAll
+import com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.getKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.removeKey
 import com.lagradost.cloudstream3.CloudStreamApp.Companion.setKey
@@ -814,11 +815,30 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }
     }
 
+    private fun registerBuiltinProviders() {
+        try {
+            allProviders.withLock {
+                if (allProviders.none { it is CrossTmdbProvider }) {
+                    allProviders.add(CrossTmdbProvider())
+                }
+                apis = allProviders.distinctBy {
+                    it.lang + it.name + it.mainUrl + it::class.qualifiedName
+                }
+                APIHolder.apiMap = null
+            }
+        } catch (e: Throwable) {
+            logError(e)
+        }
+    }
+
     private val pluginsLock = Mutex()
     private fun onAllPluginsLoaded(success: Boolean = false) {
         ioSafe {
             pluginsLock.withLock {
                 allProviders.withLock {
+                    if (allProviders.none { it is CrossTmdbProvider }) {
+                        allProviders.add(CrossTmdbProvider())
+                    }
                     // Load cloned sites after plugins have been loaded since clones depend on plugins.
                     try {
                         getKey<Array<SettingsGeneral.CustomSite>>(USER_PROVIDER_API)?.let { list ->
@@ -1203,6 +1223,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         MainAPI.settingsForProvider = settingsForProvider
         try {
             AccountManager.initMainAPI()
+            registerBuiltinProviders()
         } catch (_: Throwable) {
         }
 

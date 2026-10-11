@@ -42,9 +42,14 @@ object SettingsPlayerScreen : SearchableSettings {
         val settings = rememberAppSettings()
 
         val context = LocalContext.current
-        val defaultPlayerName = stringResource(R.string.player_settings_play_in_app)
+        val selectSourceName = stringResource(R.string.episode_action_play_mirror)
+        val autoPlayName = stringResource(R.string.player_settings_play_in_app)
         val players = remember(context) {
-            mapOf("" to defaultPlayerName) + VideoClickActionHolder.getPlayers()
+            mapOf(
+                "" to selectSourceName,
+                "AutoPlay" to autoPlayName,
+            ) + VideoClickActionHolder.getPlayers()
+                .filter { it.uniqueId() != "PlayMirrorAction" }
                 .associate { player ->
                     player.uniqueId() to (player.name.asStringNull(context)
                         ?: player::class.simpleName ?: player::class.jvmName)
