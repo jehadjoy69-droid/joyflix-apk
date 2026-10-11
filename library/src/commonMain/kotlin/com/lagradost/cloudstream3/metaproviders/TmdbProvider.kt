@@ -51,8 +51,8 @@ data class TmdbLink(
 )
 
 open class TmdbProvider : MainAPI() {
-    // This should always be false, but might as well make it easier for forks
-    open val includeAdult = false
+    // This allows 18+ adult content in TMDB search and discover
+    open val includeAdult = true
 
     // Use the LoadResponse from the metadata provider
     open val useMetaLoadResponse = false
@@ -405,41 +405,54 @@ open class TmdbProvider : MainAPI() {
     }
 
     override suspend fun getMainPage(page: Int, request: MainPageRequest): HomePageResponse {
+        var trendingMovies: List<MovieSearchResponse> = listOf()
+        var trendingSeries: List<TvSeriesSearchResponse> = listOf()
         var discoverMovies: List<MovieSearchResponse> = listOf()
         var discoverSeries: List<TvSeriesSearchResponse> = listOf()
         var topMovies: List<MovieSearchResponse> = listOf()
         var topSeries: List<TvSeriesSearchResponse> = listOf()
         runAllAsync(
             {
+                trendingMovies = parseJson<TmdbPageResult>(
+                    getApi("/trending/movie/day", mapOf("page" to "$page", "language" to "en-US"))
+                ).results?.map { it.toSearchResponse() as MovieSearchResponse } ?: listOf()
+            },
+            {
+                trendingSeries = parseJson<TmdbPageResult>(
+                    getApi("/trending/tv/day", mapOf("page" to "$page", "language" to "en-US"))
+                ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
+            },
+            {
                 discoverMovies = parseJson<TmdbPageResult>(
-                    getApi("/discover/movie", mapOf("page" to "$page"))
+                    getApi("/discover/movie", mapOf("page" to "$page", "include_adult" to "$includeAdult"))
                 ).results?.map { it.toSearchResponse() as MovieSearchResponse } ?: listOf()
             },
             {
                 discoverSeries = parseJson<TmdbPageResult>(
-                    getApi("/discover/tv", mapOf("page" to "$page"))
+                    getApi("/discover/tv", mapOf("page" to "$page", "include_adult" to "$includeAdult"))
                 ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
             },
             {
                 topMovies = parseJson<TmdbPageResult>(
-                    getApi("/movie/top_rated", mapOf("page" to "$page", "language" to "en-US", "region" to "US"))
+                    getApi("/movie/top_rated", mapOf("page" to "$page", "language" to "en-US", "region" to "US", "include_adult" to "$includeAdult"))
                 ).results?.map { it.toSearchResponse() as MovieSearchResponse } ?: listOf()
             },
             {
                 topSeries = parseJson<TmdbPageResult>(
-                    getApi("/tv/top_rated", mapOf("page" to "$page", "language" to "en-US"))
+                    getApi("/tv/top_rated", mapOf("page" to "$page", "language" to "en-US", "include_adult" to "$includeAdult"))
                 ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
             },
         )
 
-        return newHomePageResponse(
-            listOf(
-                HomePageList("Popular Movies", discoverMovies),
-                HomePageList("Popular Series", discoverSeries),
-                HomePageList("Top Movies", topMovies),
-                HomePageList("Top Series", topSeries),
-            )
-        )
+        val lists = mutableListOf<HomePageList>()
+        if (trendingMovies.isNotEmpty()) lists.add(HomePageList("Trending Movies", trendingMovies))
+        if (trendingSeries.isNotEmpty()) lists.add(HomePageList("Trending Series", trendingSeries))
+        if (discoverMovies.isNotEmpty()) lists.add(HomePageList("Popular Movies", discoverMovies))
+        if (discoverSeries.isNotEmpty()) lists.add(HomePageList("Popular Series", discoverSeries))
+        if (topMovies.isNotEmpty()) lists.add(HomePageList("Top Movies", topMovies))
+        if (topSeries.isNotEmpty()) lists.add(HomePageList("Top Series", topSeries))
+
+        return newHomePageResponse(lists)
     }
 
     open fun loadFromImdb(imdb: String, seasons: List<TmdbSeasonSummary>): LoadResponse? = null

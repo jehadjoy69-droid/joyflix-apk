@@ -204,6 +204,46 @@
                 android:orientation="vertical"
                 android:visibility="gone">
 
+                <!-- Live Voice Speaking Indicator in Portrait Chat -->
+                <LinearLayout
+                    android:id="@+id/layout_portrait_voice_speaking_indicator"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:gravity="center_vertical"
+                    android:background="#1F22C55E"
+                    android:paddingHorizontal="14dp"
+                    android:paddingVertical="7dp"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <ImageView
+                        android:layout_width="16dp"
+                        android:layout_height="16dp"
+                        android:src="@drawable/ic_baseline_mic_24"
+                        app:tint="#22C55E" />
+
+                    <TextView
+                        android:id="@+id/tv_portrait_voice_speaking_user"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:layout_marginStart="8dp"
+                        android:textColor="#22C55E"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        tools:text="Joy is talking..." />
+
+                    <TextView
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:textColor="#A022C55E"
+                        android:textSize="11sp"
+                        android:text="● Speaking" />
+                </LinearLayout>
+
                 <androidx.recyclerview.widget.RecyclerView
                     android:id="@+id/rv_portrait_chat_messages"
                     android:layout_width="match_parent"
@@ -214,6 +254,41 @@
                     android:paddingVertical="8dp"
                     app:stackFromEnd="true"
                     app:layoutManager="androidx.recyclerview.widget.LinearLayoutManager" />
+
+                <!-- Reply Context Banner -->
+                <LinearLayout
+                    android:id="@+id/layout_portrait_chat_reply_bar"
+                    android:layout_width="match_parent"
+                    android:layout_height="wrap_content"
+                    android:orientation="horizontal"
+                    android:background="#21262D"
+                    android:paddingHorizontal="12dp"
+                    android:paddingVertical="6dp"
+                    android:gravity="center_vertical"
+                    android:visibility="gone"
+                    tools:visibility="visible">
+
+                    <TextView
+                        android:id="@+id/tv_portrait_chat_replying_to"
+                        android:layout_width="0dp"
+                        android:layout_height="wrap_content"
+                        android:layout_weight="1"
+                        android:textColor="#58A6FF"
+                        android:textSize="12sp"
+                        android:textStyle="bold"
+                        android:ellipsize="end"
+                        android:maxLines="1"
+                        tools:text="Replying to @Joy: This is awesome" />
+
+                    <ImageButton
+                        android:id="@+id/btn_portrait_chat_cancel_reply"
+                        android:layout_width="26dp"
+                        android:layout_height="26dp"
+                        android:background="?attr/selectableItemBackgroundBorderless"
+                        android:src="@drawable/ic_baseline_close_24"
+                        app:tint="#8B949E"
+                        android:scaleType="fitCenter" />
+                </LinearLayout>
 
                 <!-- Chat Input Row -->
                 <LinearLayout
@@ -231,7 +306,7 @@
                         android:layout_height="40dp"
                         android:layout_weight="1"
                         android:background="@drawable/bg_chat_input_border"
-                        android:hint="Type a message..."
+                        android:hint="Type a message or use @ to mention..."
                         android:textColorHint="#60FFFFFF"
                         android:textColor="@android:color/white"
                         android:textSize="14sp"

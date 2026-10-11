@@ -66,7 +66,9 @@ object WatchTogetherManager {
         @JsonProperty("senderId") val senderId: String = "",
         @JsonProperty("senderName") val senderName: String = "",
         @JsonProperty("text") val text: String = "",
-        @JsonProperty("timestamp") val timestamp: Long = 0L
+        @JsonProperty("timestamp") val timestamp: Long = 0L,
+        @JsonProperty("replyToName") val replyToName: String? = null,
+        @JsonProperty("replyToText") val replyToText: String? = null
     )
 
     @Serializable
@@ -196,7 +198,12 @@ object WatchTogetherManager {
         }
     }
 
-    fun sendMessage(text: String, senderNickname: String) {
+    fun sendMessage(
+        text: String,
+        senderNickname: String,
+        replyToName: String? = null,
+        replyToText: String? = null
+    ) {
         val roomId = currentRoomId ?: return
         val trimmed = text.trim()
         if (trimmed.isBlank()) return
@@ -206,7 +213,9 @@ object WatchTogetherManager {
             senderId = myUserId,
             senderName = senderNickname.ifBlank { "User" },
             text = trimmed,
-            timestamp = System.currentTimeMillis()
+            timestamp = System.currentTimeMillis(),
+            replyToName = replyToName?.takeIf { it.isNotBlank() },
+            replyToText = replyToText?.takeIf { it.isNotBlank() }
         )
 
         lastSeenMessageId = msg.id
@@ -217,11 +226,18 @@ object WatchTogetherManager {
         ioSafe {
             try {
                 val url = "${getBaseUrl()}/api/rooms/$roomId/message"
-                val body = mapOf(
+                val bodyMap = mutableMapOf<String, Any>(
                     "senderId" to myUserId,
                     "senderName" to msg.senderName,
                     "text" to trimmed
-                ).toJson().toRequestBody(JSON_MEDIA_TYPE)
+                )
+                if (!replyToName.isNullOrBlank()) {
+                    bodyMap["replyToName"] = replyToName
+                }
+                if (!replyToText.isNullOrBlank()) {
+                    bodyMap["replyToText"] = replyToText
+                }
+                val body = bodyMap.toJson().toRequestBody(JSON_MEDIA_TYPE)
                 app.post(url, requestBody = body)
             } catch (e: Throwable) {
                 logError(e)
@@ -548,6 +564,13 @@ object WatchTogetherManager {
                                     lastSeenMessageId = latest.id
                                     onNewMessageCallback?.invoke(latest)
                                 }
+                            }
+
+                            // 4. Check for incoming voice message
+                            val voice = room.lastVoice
+                            if (voice != null && voice.id != lastSeenVoiceId && voice.senderId != myUserId && voice.audioBase64.isNotBlank()) {
+                                lastSeenVoiceId = voice.id
+                                onNewVoiceCallback?.invoke(voice)
                             }
                         }
                     } else if (res.code == 404 && !isHost) {

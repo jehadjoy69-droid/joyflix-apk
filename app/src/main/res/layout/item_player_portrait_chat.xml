@@ -5,33 +5,160 @@
     android:layout_height="wrap_content"
     android:orientation="horizontal"
     android:paddingVertical="5dp"
+    android:paddingHorizontal="4dp"
     android:gravity="top">
 
-    <TextView
-        android:id="@+id/tv_chat_sender"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:textSize="13sp"
-        android:textStyle="bold"
-        android:textColor="?attr/colorPrimary"
-        tools:text="Joy: " />
+    <!-- Avatar Circle with Initial -->
+    <FrameLayout
+        android:id="@+id/layout_chat_avatar"
+        android:layout_width="32dp"
+        android:layout_height="32dp"
+        android:layout_marginTop="2dp"
+        android:layout_marginEnd="8dp">
 
-    <TextView
-        android:id="@+id/tv_chat_text"
+        <View
+            android:id="@+id/view_chat_avatar_bg"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:background="@drawable/bg_chat_avatar_circle" />
+
+        <TextView
+            android:id="@+id/tv_chat_avatar_initial"
+            android:layout_width="match_parent"
+            android:layout_height="match_parent"
+            android:gravity="center"
+            android:textColor="@android:color/white"
+            android:textSize="13sp"
+            android:textStyle="bold"
+            tools:text="J" />
+    </FrameLayout>
+
+    <!-- Main Comment Bubble & Footer Area -->
+    <LinearLayout
         android:layout_width="0dp"
         android:layout_height="wrap_content"
         android:layout_weight="1"
-        android:layout_marginStart="6dp"
-        android:textColor="@android:color/white"
-        android:textSize="13sp"
-        tools:text="This anime is amazing!" />
+        android:orientation="vertical">
 
-    <TextView
-        android:id="@+id/tv_chat_time"
-        android:layout_width="wrap_content"
-        android:layout_height="wrap_content"
-        android:layout_marginStart="8dp"
-        android:textColor="#60FFFFFF"
-        android:textSize="11sp"
-        tools:text="14:32" />
+        <!-- Facebook Comment Bubble -->
+        <LinearLayout
+            android:id="@+id/layout_chat_bubble"
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="vertical"
+            android:background="@drawable/bg_chat_comment_bubble"
+            android:paddingHorizontal="12dp"
+            android:paddingVertical="7dp">
+
+            <!-- Sender Row: Name + Badge -->
+            <LinearLayout
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="horizontal"
+                android:gravity="center_vertical">
+
+                <TextView
+                    android:id="@+id/tv_chat_sender"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textSize="13sp"
+                    android:textStyle="bold"
+                    android:textColor="#58A6FF"
+                    tools:text="Joy" />
+
+                <TextView
+                    android:id="@+id/tv_chat_role_badge"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:layout_marginStart="6dp"
+                    android:background="@drawable/bg_player_chat_bubble"
+                    android:paddingHorizontal="6dp"
+                    android:paddingVertical="1dp"
+                    android:text="Host"
+                    android:textColor="#F59E0B"
+                    android:textSize="9sp"
+                    android:textStyle="bold"
+                    android:visibility="gone"
+                    tools:visibility="visible" />
+            </LinearLayout>
+
+            <!-- Reply Quote Container (if replying to someone) -->
+            <LinearLayout
+                android:id="@+id/layout_chat_reply_quote"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:orientation="vertical"
+                android:layout_marginTop="4dp"
+                android:layout_marginBottom="4dp"
+                android:background="@drawable/bg_chat_reply_quote"
+                android:paddingHorizontal="8dp"
+                android:paddingVertical="4dp"
+                android:visibility="gone"
+                tools:visibility="visible">
+
+                <TextView
+                    android:id="@+id/tv_chat_reply_target"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#79C0FF"
+                    android:textSize="11sp"
+                    android:textStyle="bold"
+                    tools:text="↩ Replying to @Alex" />
+
+                <TextView
+                    android:id="@+id/tv_chat_reply_snippet"
+                    android:layout_width="wrap_content"
+                    android:layout_height="wrap_content"
+                    android:textColor="#8B949E"
+                    android:textSize="11sp"
+                    android:ellipsize="end"
+                    android:maxLines="1"
+                    tools:text="This anime is amazing!" />
+            </LinearLayout>
+
+            <!-- Message Text -->
+            <TextView
+                android:id="@+id/tv_chat_text"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginTop="2dp"
+                android:textColor="@android:color/white"
+                android:textSize="13sp"
+                android:lineSpacingExtra="2dp"
+                tools:text="Hello everyone @Joy check this scene!" />
+        </LinearLayout>
+
+        <!-- Sub-row: Timestamp + Reply Action Button -->
+        <LinearLayout
+            android:layout_width="wrap_content"
+            android:layout_height="wrap_content"
+            android:orientation="horizontal"
+            android:gravity="center_vertical"
+            android:layout_marginStart="8dp"
+            android:layout_marginTop="3dp">
+
+            <TextView
+                android:id="@+id/tv_chat_time"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:textColor="#6E7681"
+                android:textSize="11sp"
+                tools:text="14:32" />
+
+            <TextView
+                android:id="@+id/btn_chat_reply"
+                android:layout_width="wrap_content"
+                android:layout_height="wrap_content"
+                android:layout_marginStart="14dp"
+                android:text="Reply"
+                android:textColor="#8B949E"
+                android:textSize="11sp"
+                android:textStyle="bold"
+                android:background="?attr/selectableItemBackground"
+                android:clickable="true"
+                android:focusable="true"
+                android:paddingHorizontal="4dp"
+                android:paddingVertical="2dp" />
+        </LinearLayout>
+    </LinearLayout>
 </LinearLayout>

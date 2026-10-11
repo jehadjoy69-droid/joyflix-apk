@@ -370,12 +370,13 @@ class HomeViewModel : ViewModel() {
                 }
                 val allItems = mutableListOf<HomePageList>()
 
-                val targetApis = if (validAPIs.size > 10) {
+                val prioritized = validAPIs.sortedByDescending { it is com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider }
+                val targetApis = if (prioritized.size > 10) {
                     val pinned = DataStoreHelper.pinnedProviders.toSet()
-                    val (pinnedApis, unpinnedApis) = validAPIs.partition { pinned.contains(it.name) }
+                    val (pinnedApis, unpinnedApis) = prioritized.partition { pinned.contains(it.name) || it is com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider }
                     (pinnedApis + unpinnedApis).take(10)
                 } else {
-                    validAPIs
+                    prioritized
                 }
 
                 var lastEmittedTime = 0L

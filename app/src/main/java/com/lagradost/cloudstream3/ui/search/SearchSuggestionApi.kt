@@ -45,7 +45,8 @@ object SearchSuggestionApi {
                 params = mapOf(
                     "api_key" to TMDB_API_KEY,
                     "query" to query,
-                    "language" to "en-US"
+                    "language" to "en-US",
+                    "include_adult" to "true",
                 ),
                 cacheTime = 60 * 24  // Cache for 1 day (cacheUnit default is Minutes)
             )
