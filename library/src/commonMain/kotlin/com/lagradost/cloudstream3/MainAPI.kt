@@ -159,7 +159,10 @@ object APIHolder {
             apis.withLock {
                 apiMap?.get(apiName)?.let { apis.getOrNull(it) }
                 // Leave the ?. null check, it can crash regardless
-                ?: allProviders.firstOrNull { it.name == apiName }
+                ?: allProviders.firstOrNull {
+                    it.name.equals(apiName, ignoreCase = true) ||
+                    (apiName.equals("TMDB", ignoreCase = true) && (it.name == "JoyFlix Discover" || it::class.simpleName?.contains("Tmdb", ignoreCase = true) == true))
+                }
             }
         }
     }

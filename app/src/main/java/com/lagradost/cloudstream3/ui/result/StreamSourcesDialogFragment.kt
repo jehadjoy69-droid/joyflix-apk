@@ -15,11 +15,16 @@ import androidx.core.view.isVisible
 import androidx.fragment.app.DialogFragment
 import androidx.fragment.app.FragmentActivity
 import androidx.lifecycle.lifecycleScope
+import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
+import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.unixTime
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider
 import com.lagradost.cloudstream3.metaproviders.TmdbLink
 import com.lagradost.cloudstream3.mvvm.logError
@@ -29,6 +34,7 @@ import com.lagradost.cloudstream3.ui.player.LOADTYPE_ALL
 import com.lagradost.cloudstream3.ui.player.RepoLinkGenerator
 import com.lagradost.cloudstream3.ui.player.SubtitleData
 import com.lagradost.cloudstream3.ui.player.VideoGenerator
+import com.lagradost.cloudstream3.utils.AppUtils.toJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
@@ -36,8 +42,12 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
+import kotlinx.coroutines.delay
 import kotlinx.coroutines.launch
 import kotlinx.coroutines.withContext
+import java.util.Collections
+import java.util.concurrent.ConcurrentHashMap
+import java.util.concurrent.CopyOnWriteArrayList
 
 class StreamSourcesDialogFragment : DialogFragment() {
 
@@ -52,7 +62,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
 
         fun show(
             activity: FragmentActivity?,
-            episode: ResultEpisode,
+            episode: ResultEpisode?,
             response: LoadResponse?,
             generator: VideoGenerator<*>?,
             index: Int,
@@ -81,14 +91,15 @@ class StreamSourcesDialogFragment : DialogFragment() {
     private var syncData: HashMap<String, String>? = null
 
     private var scrapingJob: Job? = null
+    private var updateJob: Job? = null
     private var isScrapingComplete: Boolean = false
     private var selectedFilter: String? = null // null = "All"
 
-    private val activeScrapers = linkedSetOf<String>()
-    private val fetchingScrapers = linkedSetOf<String>()
-    private val providerLinks = linkedMapOf<String, MutableList<ExtractorLink>>()
-    private val allLoadedLinks = mutableListOf<ExtractorLink>()
-    private val allLoadedSubs = mutableListOf<SubtitleData>()
+    private val activeScrapers = Collections.synchronizedSet(LinkedHashSet<String>())
+    private val fetchingScrapers = ConcurrentHashMap.newKeySet<String>()
+    private val providerLinks = ConcurrentHashMap<String, MutableList<ExtractorLink>>()
+    private val allLoadedLinks = CopyOnWriteArrayList<ExtractorLink>()
+    private val allLoadedSubs = CopyOnWriteArrayList<SubtitleData>()
 
     private var sourcesAdapter: StreamSourcesAdapter? = null
     private var loadingIndicator: ProgressBar? = null
@@ -105,6 +116,25 @@ class StreamSourcesDialogFragment : DialogFragment() {
         currentGenerator = pendingGenerator
         currentIndex = pendingIndex
         syncData = pendingSyncData
+
+        // Fallback for currentEpisode if null but currentResponse exists
+        val resp = currentResponse
+        if (currentEpisode == null && resp != null) {
+            val dataUrl = (resp as? MovieLoadResponse)?.dataUrl?.ifBlank { null } ?: resp.url
+            currentEpisode = buildResultEpisode(
+                headerName = resp.name,
+                name = resp.name,
+                poster = resp.posterUrl,
+                episode = 0,
+                season = null,
+                data = dataUrl,
+                apiName = resp.apiName,
+                id = dataUrl.hashCode(),
+                index = 0,
+                tvType = resp.type,
+                parentId = dataUrl.hashCode()
+            )
+        }
     }
 
     override fun onCreateView(
@@ -177,12 +207,14 @@ class StreamSourcesDialogFragment : DialogFragment() {
         }
         recyclerView?.layoutManager = LinearLayoutManager(context)
         recyclerView?.adapter = sourcesAdapter
+        recyclerView?.setHasFixedSize(false)
 
         startScraping(forceRefresh = false)
     }
 
     private fun startScraping(forceRefresh: Boolean = false) {
         scrapingJob?.cancel()
+        updateJob?.cancel()
         isScrapingComplete = false
         loadingIndicator?.isVisible = true
         emptyView?.isVisible = false
@@ -193,52 +225,80 @@ class StreamSourcesDialogFragment : DialogFragment() {
             allLoadedSubs.clear()
             fetchingScrapers.clear()
             activeScrapers.clear()
-            updateFilterChips()
-            updateSourcesList()
+            filterContainer?.removeAllViews()
+            scrapersContainer?.removeAllViews()
+            renderFilterChips()
+            renderSourcesList()
         }
 
-        val episode = currentEpisode ?: return
+        val rawEpisode = currentEpisode ?: return
+        val resp = currentResponse
+
+        // Construct safe TmdbLink if raw data is not JSON or is missing title/year/tmdbID
+        val parsedTmdbLink = tryParseJson<TmdbLink>(rawEpisode.data)
+            ?: tryParseJson<TmdbLink>((resp as? MovieLoadResponse)?.dataUrl)
+
+        val isAnime = parsedTmdbLink?.isAnime ?: (resp?.type == TvType.Anime || resp?.type == TvType.AnimeMovie)
+        val isTv = (parsedTmdbLink?.season != null && parsedTmdbLink.episode != null) || ((rawEpisode.season ?: 0) > 0)
+
+        val tmdbId = parsedTmdbLink?.tmdbID
+            ?: Regex("""themoviedb\.org/(?:movie|tv)/(\d+)""").find(resp?.url ?: rawEpisode.data ?: "")
+                ?.groupValues?.getOrNull(1)?.toIntOrNull()
+            ?: resp?.syncData?.get("tmdb")?.toIntOrNull()
+        val imdbId = parsedTmdbLink?.imdbID ?: resp?.syncData?.get("imdb")
+        val movieTitle = parsedTmdbLink?.movieName ?: resp?.name ?: rawEpisode.name
+        val year = parsedTmdbLink?.year ?: resp?.year
+
+        val safeTmdbLink = TmdbLink(
+            imdbID = imdbId,
+            tmdbID = tmdbId,
+            episode = if (isTv) rawEpisode.episode else null,
+            season = if (isTv) (rawEpisode.season ?: 1) else null,
+            movieName = movieTitle,
+            year = year,
+            isAnime = isAnime
+        )
+
+        val resolvedApiName = if (APIHolder.getApiFromNameNull(rawEpisode.apiName) == null) {
+            APIHolder.allProviders.firstOrNull { it is CrossTmdbProvider }?.name ?: "JoyFlix Discover"
+        } else {
+            rawEpisode.apiName
+        }
+
+        val episode = rawEpisode.copy(
+            apiName = resolvedApiName,
+            data = safeTmdbLink.toJson()
+        )
+        currentEpisode = episode
 
         // Pre-discover scrapers based on media type (anime vs general, series vs movie)
-        val tmdbLink = tryParseJson<TmdbLink>(episode.data)
-        val isAnime = tmdbLink?.isAnime ?: false
-        val isTv = (tmdbLink?.season != null && tmdbLink.episode != null) || ((episode.season ?: 0) > 0)
         val initialScrapers = CrossTmdbProvider.getAvailableScrapers(isAnime, isTv)
         activeScrapers.addAll(initialScrapers)
         fetchingScrapers.addAll(initialScrapers)
-        updateActiveScrapersUi()
-        updateFilterChips()
-        updateSourcesList()
+        renderActiveScrapersUi()
+        renderFilterChips()
+        renderSourcesList()
 
         CrossTmdbProvider.scraperListener = object : CrossTmdbProvider.ScraperListener {
             override fun onScrapersDiscovered(scrapers: List<String>) {
-                view?.post {
-                    activeScrapers.addAll(scrapers)
-                    fetchingScrapers.addAll(scrapers)
-                    updateActiveScrapersUi()
-                    updateFilterChips()
-                    updateSourcesList()
-                }
+                activeScrapers.addAll(scrapers)
+                fetchingScrapers.addAll(scrapers)
+                scheduleUiUpdate()
             }
 
             override fun onScraperStarted(scraper: String) {
-                view?.post {
-                    activeScrapers.add(scraper)
-                    fetchingScrapers.add(scraper)
-                    updateActiveScrapersUi()
-                    updateSourcesList()
-                }
+                activeScrapers.add(scraper)
+                fetchingScrapers.add(scraper)
+                scheduleUiUpdate()
             }
 
             override fun onScraperFinished(scraper: String, linksCount: Int) {
-                view?.post {
-                    fetchingScrapers.remove(scraper)
-                    updateSourcesList()
-                }
+                fetchingScrapers.remove(scraper)
+                scheduleUiUpdate()
             }
         }
 
-        val tempGenerator = RepoLinkGenerator(listOf(episode), page = currentResponse)
+        val tempGenerator = RepoLinkGenerator(listOf(episode), page = resp)
 
         scrapingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
@@ -247,9 +307,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
                     sourceTypes = LOADTYPE_ALL,
                     callback = { (link, _) ->
                         if (link != null && isValidLink(link)) {
-                            lifecycleScope.launch(Dispatchers.Main) {
-                                handleIncomingLink(link)
-                            }
+                            handleIncomingLink(link)
                         }
                     },
                     subtitleCallback = { sub ->
@@ -265,8 +323,9 @@ class StreamSourcesDialogFragment : DialogFragment() {
                     isScrapingComplete = true
                     loadingIndicator?.isVisible = false
                     fetchingScrapers.clear()
-                    updateSourcesList()
-                    updateFilterChips()
+                    updateJob?.cancel()
+                    renderFilterChips()
+                    renderSourcesList()
                 }
             }
         }
@@ -288,65 +347,99 @@ class StreamSourcesDialogFragment : DialogFragment() {
         allLoadedLinks.add(link)
 
         val provider = link.source.ifBlank { "Stream" }
-        val list = providerLinks.getOrPut(provider) { mutableListOf() }
+        val list = providerLinks.getOrPut(provider) { CopyOnWriteArrayList() }
         list.add(link)
         fetchingScrapers.remove(provider)
 
-        updateSourcesList()
-        updateFilterChips()
+        scheduleUiUpdate()
+    }
+
+    private fun scheduleUiUpdate(delayMs: Long = 120L) {
+        if (!isAdded || isDetached) return
+        if (updateJob?.isActive == true) return
+        updateJob = lifecycleScope.launch(Dispatchers.Main) {
+            delay(delayMs)
+            if (!isAdded || isDetached) return@launch
+            renderActiveScrapersUi()
+            renderFilterChips()
+            renderSourcesList()
+        }
     }
 
     @SuppressLint("InflateParams")
-    private fun updateActiveScrapersUi() {
+    private fun renderActiveScrapersUi() {
         val container = scrapersContainer ?: return
-        container.removeAllViews()
+        val ctx = context ?: return
+        val inflater = LayoutInflater.from(ctx)
 
         if (activeScrapers.isEmpty()) {
             scrapersSection?.isVisible = false
             return
         }
-
         scrapersSection?.isVisible = true
-        val inflater = LayoutInflater.from(context ?: return)
 
-        for (scraper in activeScrapers) {
-            val chip = inflater.inflate(R.layout.item_active_scraper_chip, container, false) as TextView
-            chip.text = scraper
-            container.addView(chip)
+        val existingTags = mutableSetOf<String>()
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) as? TextView ?: continue
+            val tag = child.tag as? String ?: continue
+            existingTags.add(tag)
+        }
+
+        val scrapersCopy = synchronized(activeScrapers) { activeScrapers.toList() }
+        for (scraper in scrapersCopy) {
+            if (!existingTags.contains(scraper)) {
+                val chip = inflater.inflate(R.layout.item_active_scraper_chip, container, false) as TextView
+                chip.text = scraper
+                chip.tag = scraper
+                container.addView(chip)
+                existingTags.add(scraper)
+            }
         }
     }
 
     @SuppressLint("InflateParams")
-    private fun updateFilterChips() {
+    private fun renderFilterChips() {
         val container = filterContainer ?: return
-        container.removeAllViews()
-        val inflater = LayoutInflater.from(context ?: return)
+        val ctx = context ?: return
+        val inflater = LayoutInflater.from(ctx)
 
-        // "All" chip
-        val allChip = inflater.inflate(R.layout.item_stream_filter_chip, container, false) as TextView
-        allChip.text = "All"
-        styleFilterChip(allChip, selectedFilter == null)
-        allChip.setOnClickListener {
-            selectedFilter = null
-            updateFilterChips()
-            updateSourcesList()
-        }
-        container.addView(allChip)
-
-        // Provider chips for providers with links or known scrapers
         val providersWithLinks = providerLinks.filter { it.value.isNotEmpty() }.keys
-        val filterOptions = providersWithLinks.ifEmpty { activeScrapers }
+        val scrapersSnapshot = synchronized(activeScrapers) { activeScrapers.toList() }
+        val filterOptions = providersWithLinks.ifEmpty { scrapersSnapshot }
 
-        for (provider in filterOptions) {
-            val chip = inflater.inflate(R.layout.item_stream_filter_chip, container, false) as TextView
-            chip.text = provider
-            styleFilterChip(chip, selectedFilter == provider)
-            chip.setOnClickListener {
-                selectedFilter = if (selectedFilter == provider) null else provider
-                updateFilterChips()
-                updateSourcesList()
+        val requiredChips = mutableListOf("All")
+        requiredChips.addAll(filterOptions)
+
+        val existingChips = mutableMapOf<String, TextView>()
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) as? TextView ?: continue
+            val tag = child.tag as? String ?: continue
+            existingChips[tag] = child
+        }
+
+        // Add chips that don't exist yet
+        for (name in requiredChips) {
+            if (!existingChips.containsKey(name)) {
+                val chip = inflater.inflate(R.layout.item_stream_filter_chip, container, false) as TextView
+                chip.text = name
+                chip.tag = name
+                chip.setOnClickListener {
+                    selectedFilter = if (name == "All" || selectedFilter == name) null else name
+                    renderFilterChips()
+                    renderSourcesList()
+                }
+                container.addView(chip)
+                existingChips[name] = chip
             }
-            container.addView(chip)
+        }
+
+        // Update styling and visibility without removing existing views!
+        for (i in 0 until container.childCount) {
+            val child = container.getChildAt(i) as? TextView ?: continue
+            val tag = child.tag as? String ?: continue
+            val isSelected = (selectedFilter == null && tag == "All") || (selectedFilter == tag)
+            styleFilterChip(child, isSelected)
+            child.isVisible = requiredChips.contains(tag)
         }
     }
 
@@ -360,7 +453,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
         }
     }
 
-    private fun updateSourcesList() {
+    private fun renderSourcesList() {
         val items = mutableListOf<StreamSourceItem>()
 
         val displayedProviders = if (selectedFilter != null) {
@@ -400,19 +493,26 @@ class StreamSourcesDialogFragment : DialogFragment() {
 
         // 1. Populate RepoLinkGenerator.cache with selected link first!
         synchronized(RepoLinkGenerator.cache) {
-            val cacheItem = RepoLinkGenerator.cache.getOrPut(episode.apiName to episode.id) {
-                Cache(mutableSetOf(), mutableSetOf(), unixTime, true)
-            }
-            val orderedLinks = linkedSetOf<ExtractorLink>()
-            orderedLinks.add(selectedLink)
-            orderedLinks.addAll(allLoadedLinks)
+            val keysToCache = setOf(
+                episode.apiName to episode.id,
+                "JoyFlix Discover" to episode.id,
+                "TMDB" to episode.id
+            )
+            for (key in keysToCache) {
+                val cacheItem = RepoLinkGenerator.cache.getOrPut(key) {
+                    Cache(mutableSetOf(), mutableSetOf(), unixTime, true)
+                }
+                val orderedLinks = linkedSetOf<ExtractorLink>()
+                orderedLinks.add(selectedLink)
+                orderedLinks.addAll(allLoadedLinks)
 
-            cacheItem.linkCache.clear()
-            cacheItem.linkCache.addAll(orderedLinks)
-            cacheItem.subtitleCache.clear()
-            cacheItem.subtitleCache.addAll(allLoadedSubs)
-            cacheItem.saturated = true
-            cacheItem.lastCachedTimestamp = unixTime
+                cacheItem.linkCache.clear()
+                cacheItem.linkCache.addAll(orderedLinks)
+                cacheItem.subtitleCache.clear()
+                cacheItem.subtitleCache.addAll(allLoadedSubs)
+                cacheItem.saturated = true
+                cacheItem.lastCachedTimestamp = unixTime
+            }
         }
 
         // 2. Dismiss dialog
@@ -432,6 +532,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
     override fun onDestroy() {
         super.onDestroy()
         scrapingJob?.cancel()
+        updateJob?.cancel()
         CrossTmdbProvider.scraperListener = null
         pendingEpisode = null
         pendingResponse = null
@@ -445,25 +546,33 @@ sealed class StreamSourceItem {
     data class Link(val link: ExtractorLink, val providerName: String) : StreamSourceItem()
 }
 
+class StreamSourceDiffCallback : DiffUtil.ItemCallback<StreamSourceItem>() {
+    override fun areItemsTheSame(oldItem: StreamSourceItem, newItem: StreamSourceItem): Boolean {
+        return when {
+            oldItem is StreamSourceItem.Header && newItem is StreamSourceItem.Header ->
+                oldItem.providerName == newItem.providerName
+            oldItem is StreamSourceItem.Link && newItem is StreamSourceItem.Link ->
+                oldItem.link.url == newItem.link.url
+            else -> false
+        }
+    }
+
+    override fun areContentsTheSame(oldItem: StreamSourceItem, newItem: StreamSourceItem): Boolean {
+        return oldItem == newItem
+    }
+}
+
 class StreamSourcesAdapter(
     private val onLinkClick: (ExtractorLink) -> Unit
-) : RecyclerView.Adapter<RecyclerView.ViewHolder>() {
+) : ListAdapter<StreamSourceItem, RecyclerView.ViewHolder>(StreamSourceDiffCallback()) {
 
     companion object {
         const val TYPE_HEADER = 0
         const val TYPE_LINK = 1
     }
 
-    private var items: List<StreamSourceItem> = emptyList()
-
-    @SuppressLint("NotifyDataSetChanged")
-    fun submitList(newItems: List<StreamSourceItem>) {
-        items = newItems
-        notifyDataSetChanged()
-    }
-
     override fun getItemViewType(position: Int): Int {
-        return when (items[position]) {
+        return when (getItem(position)) {
             is StreamSourceItem.Header -> TYPE_HEADER
             is StreamSourceItem.Link -> TYPE_LINK
         }
@@ -481,13 +590,11 @@ class StreamSourcesAdapter(
     }
 
     override fun onBindViewHolder(holder: RecyclerView.ViewHolder, position: Int) {
-        when (val item = items[position]) {
+        when (val item = getItem(position)) {
             is StreamSourceItem.Header -> (holder as HeaderViewHolder).bind(item)
             is StreamSourceItem.Link -> (holder as LinkViewHolder).bind(item)
         }
     }
-
-    override fun getItemCount(): Int = items.size
 
     class HeaderViewHolder(itemView: View) : RecyclerView.ViewHolder(itemView) {
         private val title: TextView = itemView.findViewById(R.id.header_provider_title)

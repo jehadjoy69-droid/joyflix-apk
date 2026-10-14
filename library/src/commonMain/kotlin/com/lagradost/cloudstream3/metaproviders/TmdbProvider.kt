@@ -255,7 +255,7 @@ open class TmdbProvider : MainAPI() {
         else "https://www.themoviedb.org/movie/${id ?: -1}"
     }
 
-    private suspend fun getApi(path: String, extraParams: Map<String, String> = emptyMap()): String {
+    protected suspend fun getApi(path: String, extraParams: Map<String, String> = emptyMap()): String {
         val params = buildMap {
             put("api_key", tmdbApiKey)
             putAll(extraParams)

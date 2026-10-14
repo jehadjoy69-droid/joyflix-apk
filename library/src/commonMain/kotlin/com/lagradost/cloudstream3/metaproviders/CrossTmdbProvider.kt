@@ -17,6 +17,7 @@ import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.syncproviders.SyncIdName
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.loadExtractor
@@ -231,8 +232,62 @@ class CrossTmdbProvider : TmdbProvider() {
         }
 
         // 2. Resolve TmdbLink across all active scraping provider extensions
-        val tmdbLink = tryParseJson<TmdbLink>(data) ?: return false
-        val title = tmdbLink.movieName ?: return false
+        var resolvedLink = tryParseJson<TmdbLink>(data)
+        if (resolvedLink == null) {
+            val tmdbUrlRegex = Regex("""themoviedb\.org/(movie|tv)/(\d+)""")
+            val match = tmdbUrlRegex.find(data)
+            if (match != null) {
+                val isTvType = match.groupValues[1] == "tv"
+                val id = match.groupValues[2].toIntOrNull()
+                if (id != null) {
+                    try {
+                        val path = if (isTvType) "/tv/$id" else "/movie/$id"
+                        val json = getApi(path, mapOf("language" to "en-US", "append_to_response" to "external_ids"))
+                        if (isTvType) {
+                            val detail = parseJson<TmdbTvDetail>(json)
+                            resolvedLink = TmdbLink(
+                                imdbID = detail.externalIds?.imdbId,
+                                tmdbID = id,
+                                episode = 1,
+                                season = 1,
+                                movieName = detail.displayTitle,
+                                year = detail.year,
+                                isAnime = detail.isAnime
+                            )
+                        } else {
+                            val detail = parseJson<TmdbMovieDetail>(json)
+                            resolvedLink = TmdbLink(
+                                imdbID = detail.imdbId ?: detail.externalIds?.imdbId,
+                                tmdbID = id,
+                                episode = null,
+                                season = null,
+                                movieName = detail.displayTitle,
+                                year = detail.year,
+                                isAnime = detail.isAnime
+                            )
+                        }
+                    } catch (e: Exception) {
+                        logError(e)
+                    }
+                }
+            }
+        }
+
+        val tmdbLink = resolvedLink ?: return false
+        var title = tmdbLink.movieName
+        if (title.isNullOrBlank() && tmdbLink.tmdbID != null) {
+            try {
+                val isTvType = tmdbLink.season != null && tmdbLink.episode != null
+                val path = if (isTvType) "/tv/${tmdbLink.tmdbID}" else "/movie/${tmdbLink.tmdbID}"
+                val json = getApi(path, mapOf("language" to "en-US"))
+                val nameRegex = Regex(""""(?:title|name)"\s*:\s*"([^"]+)"""")
+                title = nameRegex.find(json)?.groupValues?.getOrNull(1)
+            } catch (e: Exception) {
+                logError(e)
+            }
+        }
+        if (title.isNullOrBlank()) return false
+
         val cleanTitle = filterName(title)
         val season = tmdbLink.season
         val episode = tmdbLink.episode
