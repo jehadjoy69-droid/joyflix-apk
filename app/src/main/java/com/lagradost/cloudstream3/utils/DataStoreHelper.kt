@@ -191,7 +191,7 @@ object DataStoreHelper {
      * Setting this does not automatically reload the homepage.
      */
     var currentHomePage: String?
-        get() = getKey<String>("$currentAccount/$USER_SELECTED_HOMEPAGE_API")
+        get() = getKey<String>("$currentAccount/$USER_SELECTED_HOMEPAGE_API") ?: "JoyFlix Discover"
         set(value) {
             val key = "$currentAccount/$USER_SELECTED_HOMEPAGE_API"
             if (value == null) {

@@ -6,15 +6,22 @@ import com.lagradost.cloudstream3.APIHolder.getApiFromNameNull
 import com.lagradost.cloudstream3.Episode
 import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.MovieLoadResponse
+import com.lagradost.cloudstream3.MovieSearchResponse
+import com.lagradost.cloudstream3.SearchResponse
 import com.lagradost.cloudstream3.SearchResponseList
 import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
+import com.lagradost.cloudstream3.TvSeriesSearchResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.amap
+import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.logError
 import com.lagradost.cloudstream3.syncproviders.SyncIdName
 import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.ExtractorLink
+import com.lagradost.cloudstream3.utils.loadExtractor
+import kotlinx.coroutines.async
+import kotlinx.coroutines.coroutineScope
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 
@@ -28,20 +35,84 @@ class CrossTmdbProvider : TmdbProvider() {
     override val supportedTypes = setOf(TvType.Movie, TvType.TvSeries)
     override val includeAdult = true
 
+    private val SearchResponse.yearOrNull: Int?
+        get() = (this as? MovieSearchResponse)?.year ?: (this as? TvSeriesSearchResponse)?.year
+
     private fun filterName(name: String): String {
         return Regex("""[^a-zA-Z0-9]""").replace(name, "").lowercase()
     }
 
-    private val validApis: List<com.lagradost.cloudstream3.MainAPI>
-        get() = apis.filter {
-            it.name != this.name &&
-            it !is TmdbProvider &&
-            it.name != "All" &&
-            it.name != "None" &&
-            it.name != "Random" &&
-            !it.name.contains("IPTV", ignoreCase = true) &&
-            !it.supportedTypes.all { type -> type == TvType.Live }
+    interface ScraperListener {
+        fun onScrapersDiscovered(scrapers: List<String>)
+        fun onScraperStarted(scraper: String)
+        fun onScraperFinished(scraper: String, linksCount: Int)
+    }
+
+    companion object {
+        var scraperListener: ScraperListener? = null
+
+        fun isAnimeApiStatic(api: com.lagradost.cloudstream3.MainAPI): Boolean {
+            val types = api.supportedTypes
+            val isPureAnime = types.isNotEmpty() && types.all {
+                it == TvType.Anime || it == TvType.AnimeMovie || it == TvType.OVA
+            }
+            val hasAnimeNoGeneral = types.contains(TvType.Anime) &&
+                !types.contains(TvType.Movie) &&
+                !types.contains(TvType.TvSeries)
+            val nameLower = api.name.lowercase()
+            val isAnimeName = nameLower.contains("anime") ||
+                nameLower.contains("aniwave") ||
+                nameLower.contains("gogo") ||
+                nameLower.contains("zoro") ||
+                nameLower.contains("marin") ||
+                nameLower.contains("yomiroll") ||
+                nameLower.contains("aniwatch") ||
+                nameLower.contains("allanime") ||
+                nameLower.contains("nineanime") ||
+                nameLower.contains("kickass")
+
+            return isPureAnime || hasAnimeNoGeneral || isAnimeName
         }
+
+        fun getValidApisStatic(): List<com.lagradost.cloudstream3.MainAPI> {
+            return (apis + com.lagradost.cloudstream3.APIHolder.allProviders).distinctBy { it.name }.filter {
+                it.name != "JoyFlix Discover" &&
+                it !is TmdbProvider &&
+                it.name != "All" &&
+                it.name != "None" &&
+                it.name != "Random" &&
+                !it.name.contains("IPTV", ignoreCase = true) &&
+                !it.supportedTypes.all { type -> type == TvType.Live }
+            }
+        }
+
+        fun getAvailableScrapers(isAnime: Boolean = false, isTv: Boolean = false): List<String> {
+            val valid = getValidApisStatic()
+            return valid.filter { api ->
+                if (!isAnime && isAnimeApiStatic(api)) {
+                    return@filter false
+                }
+
+                if (isAnime) {
+                    api.supportedTypes.any {
+                        it == TvType.Anime || it == TvType.AnimeMovie || it == TvType.TvSeries || it == TvType.Movie
+                    } || isAnimeApiStatic(api)
+                } else if (isTv) {
+                    api.supportedTypes.any {
+                        it == TvType.TvSeries || it == TvType.AsianDrama || it == TvType.Cartoon
+                    }
+                } else {
+                    api.supportedTypes.any {
+                        it == TvType.Movie || it == TvType.Cartoon || it == TvType.Torrent
+                    }
+                }
+            }.ifEmpty { valid.filter { !(!isAnime && isAnimeApiStatic(it)) } }
+            .map { it.name }
+        }
+    }
+
+    private val validApis: List<com.lagradost.cloudstream3.MainAPI>
+        get() = getValidApisStatic()
 
     @Serializable
     data class CrossMetaData(
@@ -57,25 +128,105 @@ class CrossTmdbProvider : TmdbProvider() {
         return super.load(url)
     }
 
+    private suspend fun loadUniversalEmbeds(
+        tmdbId: Int?,
+        imdbId: String?,
+        isTv: Boolean,
+        season: Int?,
+        episode: Int?,
+        subtitleCallback: (SubtitleFile) -> Unit,
+        callback: (ExtractorLink) -> Unit
+    ) {
+        if (tmdbId == null && imdbId.isNullOrBlank()) return
+
+        val embedUrls = mutableListOf<String>()
+
+        if (tmdbId != null) {
+            if (isTv && season != null && episode != null) {
+                embedUrls.add("https://player.autoembed.cc/embed/tv/$tmdbId/$season/$episode")
+                embedUrls.add("https://vidsrc.xyz/embed/tv?tmdb=$tmdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.to/embed/tv/$tmdbId/$season/$episode")
+                embedUrls.add("https://www.2embed.cc/embedtv/$tmdbId&s=$season&e=$episode")
+            } else {
+                embedUrls.add("https://player.autoembed.cc/embed/movie/$tmdbId")
+                embedUrls.add("https://vidsrc.xyz/embed/movie?tmdb=$tmdbId")
+                embedUrls.add("https://vidsrc.to/embed/movie/$tmdbId")
+                embedUrls.add("https://vidsrc.cc/v2/embed/movie/$tmdbId")
+                embedUrls.add("https://www.2embed.cc/embed/$tmdbId")
+            }
+        }
+
+        if (!imdbId.isNullOrBlank()) {
+            if (isTv && season != null && episode != null) {
+                embedUrls.add("https://vidsrc.xyz/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.me/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+            } else {
+                embedUrls.add("https://vidsrc.xyz/embed/movie?imdb=$imdbId")
+                embedUrls.add("https://vidsrc.me/embed/movie?imdb=$imdbId")
+            }
+        }
+
+        for (embedUrl in embedUrls) {
+            try {
+                if (loadExtractor(embedUrl, subtitleCallback, callback)) {
+                    // Extractor handled this embed directly
+                    continue
+                }
+                val response = app.get(
+                    embedUrl,
+                    headers = mapOf(
+                        "User-Agent" to "Mozilla/5.0 (Windows NT 10.0; Win64; x64) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36",
+                        "Referer" to "https://www.google.com/"
+                    ),
+                    timeout = 10_000L
+                )
+                val html = response.text
+                if (html.isNotBlank()) {
+                    val iframeRegex = Regex("""<iframe[^>]+src=["']([^"']+)["']""", RegexOption.IGNORE_CASE)
+                    val iframeUrls = iframeRegex.findAll(html).map { it.groupValues[1] }.take(3).toList()
+
+                    for (iframeUrl in iframeUrls) {
+                        try {
+                            val resolvedUrl = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
+                            loadExtractor(resolvedUrl, embedUrl, subtitleCallback, callback)
+                        } catch (e: Exception) {
+                            logError(e)
+                        }
+                    }
+                }
+            } catch (_: Throwable) {
+            }
+        }
+    }
+
+    private fun isAnimeApi(api: com.lagradost.cloudstream3.MainAPI): Boolean = isAnimeApiStatic(api)
+
+
     override suspend fun loadLinks(
         data: String,
         isCasting: Boolean,
         subtitleCallback: (SubtitleFile) -> Unit,
         callback: (ExtractorLink) -> Unit
     ): Boolean {
+        var foundAnyLink = false
+        val wrappedCallback: (ExtractorLink) -> Unit = { link ->
+            foundAnyLink = true
+            callback(link)
+        }
+
         // 1. Backwards compatibility with cached CrossMetaData
         tryParseJson<CrossMetaData>(data)?.let { metaData ->
             if (metaData.isSuccess) {
                 metaData.movies?.amap { (apiName, movieData) ->
                     getApiFromNameNull(apiName)?.let { api ->
                         try {
-                            api.loadLinks(movieData, isCasting, subtitleCallback, callback)
+                            api.loadLinks(movieData, isCasting, subtitleCallback, wrappedCallback)
                         } catch (e: Exception) {
                             logError(e)
                         }
                     }
                 }
-                return true
+                return foundAnyLink
             }
         }
 
@@ -87,57 +238,142 @@ class CrossTmdbProvider : TmdbProvider() {
         val episode = tmdbLink.episode
         val isTv = season != null && episode != null
         val imdbId = tmdbLink.imdbID
+        val tmdbId = tmdbLink.tmdbID
+        val releaseYear = tmdbLink.year
+        val isAnime = tmdbLink.isAnime
 
         val available = validApis.filter { api ->
-            if (isTv) api.supportedTypes.contains(TvType.TvSeries)
-            else api.supportedTypes.contains(TvType.Movie)
-        }
+            // ANIME NA HOLE ANIME EXTENSION / ANIME SITE-A KONO REQUEST JABE NA
+            if (!isAnime && isAnimeApi(api)) {
+                return@filter false
+            }
 
-        if (available.isEmpty()) return false
+            if (isAnime) {
+                api.supportedTypes.any {
+                    it == TvType.Anime || it == TvType.AnimeMovie || it == TvType.TvSeries || it == TvType.Movie
+                } || isAnimeApi(api)
+            } else if (isTv) {
+                api.supportedTypes.any {
+                    it == TvType.TvSeries || it == TvType.AsianDrama || it == TvType.Cartoon
+                }
+            } else {
+                api.supportedTypes.any {
+                    it == TvType.Movie || it == TvType.Cartoon || it == TvType.Torrent
+                }
+            }
+        }.ifEmpty { validApis.filter { !(!isAnime && isAnimeApi(it)) } }
 
-        available.amap { api ->
-            try {
-                var loaded: LoadResponse? = null
+        val scraperNames = available.map { it.name }
+        scraperListener?.onScrapersDiscovered(scraperNames)
 
-                // Try IMDb direct sync URL if supported
-                if (!imdbId.isNullOrBlank() && api.supportedSyncNames.contains(SyncIdName.Imdb)) {
-                    try {
-                        val syncUrl = api.getLoadUrl(SyncIdName.Imdb, imdbId)
-                        if (!syncUrl.isNullOrBlank()) {
-                            loaded = api.load(syncUrl)
+        if (available.isNotEmpty()) {
+            available.amap { api ->
+                scraperListener?.onScraperStarted(api.name)
+                var linksFromThisScraper = 0
+                try {
+                    var loaded: LoadResponse? = null
+
+                    // Try IMDb direct sync URL if supported
+                    if (!imdbId.isNullOrBlank() && api.supportedSyncNames.contains(SyncIdName.Imdb)) {
+                        try {
+                            val syncUrl = api.getLoadUrl(SyncIdName.Imdb, imdbId)
+                            if (!syncUrl.isNullOrBlank()) {
+                                loaded = api.load(syncUrl)
+                            }
+                        } catch (e: Exception) {
+                            logError(e)
                         }
-                    } catch (e: Exception) {
-                        logError(e)
                     }
-                }
 
-                // If direct sync not available, search by title
-                if (loaded == null) {
-                    val items = api.search(title) ?: emptyList()
-                    val match = items.firstOrNull { item ->
-                        val itemClean = filterName(item.name)
-                        itemClean == cleanTitle || itemClean.contains(cleanTitle) || cleanTitle.contains(itemClean)
-                    } ?: items.firstOrNull()
+                    // If direct sync not available, search with title variations
+                    if (loaded == null) {
+                        val searchQueries = linkedSetOf<String>()
+                        searchQueries.add(title)
+                        if (title.contains("&")) {
+                            searchQueries.add(title.replace("&", "and"))
+                            searchQueries.add(title.replace("&", " "))
+                        }
+                        if (title.contains(":")) {
+                            searchQueries.add(title.substringBefore(":").trim())
+                            searchQueries.add(title.replace(":", " "))
+                        }
+                        val cleanQuery = title.replace(Regex("""[^a-zA-Z0-9\s]"""), " ")
+                            .replace(Regex("""\s+"""), " ").trim()
+                        if (cleanQuery.isNotBlank() && !cleanQuery.equals(title, ignoreCase = true)) {
+                            searchQueries.add(cleanQuery)
+                        }
 
-                    if (match != null) {
-                        loaded = api.load(match.url)
+                        var items: List<SearchResponse> = emptyList()
+                        for (q in searchQueries) {
+                            try {
+                                val res = api.search(q)
+                                if (!res.isNullOrEmpty()) {
+                                    items = res
+                                    break
+                                }
+                            } catch (_: Throwable) {
+                            }
+                        }
+
+                        if (items.isNotEmpty()) {
+                            val match = items.firstOrNull { item ->
+                                val itemClean = filterName(item.name)
+                                val matches = itemClean == cleanTitle ||
+                                    (cleanTitle.isNotEmpty() && itemClean.contains(cleanTitle)) ||
+                                    (itemClean.isNotEmpty() && cleanTitle.contains(itemClean))
+                                matches && (releaseYear == null || item.yearOrNull == null || item.yearOrNull == releaseYear)
+                            } ?: items.firstOrNull { item ->
+                                val itemClean = filterName(item.name)
+                                itemClean == cleanTitle ||
+                                    (cleanTitle.isNotEmpty() && itemClean.contains(cleanTitle)) ||
+                                    (itemClean.isNotEmpty() && cleanTitle.contains(itemClean))
+                            } ?: items.firstOrNull()
+
+                            if (match != null) {
+                                loaded = api.load(match.url)
+                            }
+                        }
                     }
-                }
 
-                if (loaded != null) {
-                    if (isTv && loaded is TvSeriesLoadResponse) {
-                        val targetEp: Episode? = loaded.episodes.firstOrNull { ep ->
-                            ep.season == season && ep.episode == episode
-                        } ?: if (season == 1) loaded.episodes.firstOrNull { it.episode == episode } else null
+                    if (loaded != null) {
+                        val targetData: String? = if (isTv) {
+                            when (loaded) {
+                                is TvSeriesLoadResponse -> {
+                                    val targetEp = loaded.episodes.firstOrNull { ep ->
+                                        ep.season == season && ep.episode == episode
+                                    } ?: (if (season == 1) loaded.episodes.firstOrNull { it.episode == episode } else null)
+                                    ?: loaded.episodes.getOrNull(episode - 1)
+                                    ?: loaded.episodes.firstOrNull()
 
-                        if (targetEp != null) {
-                            api.loadLinks(targetEp.data, isCasting, subtitleCallback) { extLink ->
+                                    targetEp?.data
+                                }
+                                is MovieLoadResponse -> {
+                                    loaded.dataUrl.ifBlank { null } ?: loaded.url
+                                }
+                                else -> loaded.url
+                            }
+                        } else {
+                            when (loaded) {
+                                is MovieLoadResponse -> {
+                                    loaded.dataUrl.ifBlank { null } ?: loaded.url
+                                }
+                                is TvSeriesLoadResponse -> {
+                                    loaded.episodes.firstOrNull()?.data ?: loaded.url
+                                }
+                                else -> loaded.url
+                            }
+                        }
+
+                        if (!targetData.isNullOrBlank()) {
+                            api.loadLinks(targetData, isCasting, subtitleCallback) { extLink ->
+                                linksFromThisScraper++
                                 val streamName = if (extLink.name.contains(api.name, ignoreCase = true)) {
                                     extLink.name
                                 } else {
                                     "[${api.name}] ${extLink.name}"
                                 }
-                                callback(
+                                @Suppress("DEPRECATION")
+                                wrappedCallback(
                                     ExtractorLink(
                                         source = api.name,
                                         name = streamName,
@@ -152,35 +388,50 @@ class CrossTmdbProvider : TmdbProvider() {
                                 )
                             }
                         }
-                    } else if (!isTv) {
-                        val movieData = (loaded as? MovieLoadResponse)?.dataUrl?.ifBlank { null } ?: loaded.url
-                        api.loadLinks(movieData, isCasting, subtitleCallback) { extLink ->
-                            val streamName = if (extLink.name.contains(api.name, ignoreCase = true)) {
-                                extLink.name
-                            } else {
-                                "[${api.name}] ${extLink.name}"
-                            }
-                            callback(
-                                ExtractorLink(
-                                    source = api.name,
-                                    name = streamName,
-                                    url = extLink.url,
-                                    referer = extLink.referer,
-                                    quality = extLink.quality,
-                                    headers = extLink.headers,
-                                    extractorData = extLink.extractorData,
-                                    type = extLink.type,
-                                    audioTracks = extLink.audioTracks,
-                                )
-                            )
-                        }
                     }
+                } catch (e: Exception) {
+                    logError(e)
+                } finally {
+                    scraperListener?.onScraperFinished(api.name, linksFromThisScraper)
                 }
+            }
+        }
+
+        // 3. Fallback to universal embeds if extensions returned no playable stream links
+        if (!foundAnyLink) {
+            try {
+                scraperListener?.onScraperStarted("Universal Embeds")
+                var embedCount = 0
+                loadUniversalEmbeds(
+                    tmdbId = tmdbId,
+                    imdbId = imdbId,
+                    isTv = isTv,
+                    season = season,
+                    episode = episode,
+                    subtitleCallback = subtitleCallback,
+                    callback = { extLink ->
+                        embedCount++
+                        wrappedCallback(
+                            ExtractorLink(
+                                source = "Universal Embeds",
+                                name = extLink.name,
+                                url = extLink.url,
+                                referer = extLink.referer,
+                                quality = extLink.quality,
+                                headers = extLink.headers,
+                                extractorData = extLink.extractorData,
+                                type = extLink.type,
+                                audioTracks = extLink.audioTracks,
+                            )
+                        )
+                    }
+                )
+                scraperListener?.onScraperFinished("Universal Embeds", embedCount)
             } catch (e: Exception) {
                 logError(e)
             }
         }
 
-        return true
+        return foundAnyLink || available.isNotEmpty()
     }
 }

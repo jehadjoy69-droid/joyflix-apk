@@ -255,7 +255,7 @@ class SearchViewModel : ViewModel() {
          * Calculates a relevance score for a search result based on the search query.
          * Exact matches and titles starting with the query receive the highest priority.
          */
-        fun calculateRelevanceScore(name: String, query: String, hasPoster: Boolean = true): Double {
+        fun calculateRelevanceScore(name: String, query: String, hasPoster: Boolean = true, isOfficialCatalog: Boolean = false): Double {
             val q = query.trim().lowercase()
             val title = name.trim().lowercase()
             if (q.isEmpty() || title.isEmpty()) return 0.0
@@ -307,6 +307,9 @@ class SearchViewModel : ViewModel() {
             if (hasPoster) {
                 score += 15.0
             }
+            if (isOfficialCatalog) {
+                score += 60.0
+            }
 
             return score
         }
@@ -328,7 +331,8 @@ class SearchViewModel : ViewModel() {
                     val relevance = calculateRelevanceScore(
                         name = response.name,
                         query = q,
-                        hasPoster = !response.posterUrl.isNullOrBlank()
+                        hasPoster = !response.posterUrl.isNullOrBlank(),
+                        isOfficialCatalog = response.apiName == "JoyFlix Discover"
                     )
                     // Slight penalty for being further down in original provider list
                     val positionPenalty = (index * 0.1).coerceAtMost(20.0)

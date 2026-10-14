@@ -28,6 +28,18 @@ fun Requests.initClient(context: Context, ignoreSSL: Boolean = false) {
 }
 
 
+private var sharedHttpCache: okhttp3.Cache? = null
+private val httpCacheLock = Any()
+
+private fun getSharedHttpCache(context: Context): okhttp3.Cache {
+    return sharedHttpCache ?: synchronized(httpCacheLock) {
+        sharedHttpCache ?: okhttp3.Cache(
+            directory = File(context.cacheDir, "http_cache"),
+            maxSize = 50L * 1024L * 1024L // 50 MiB
+        ).also { sharedHttpCache = it }
+    }
+}
+
 // Backwards compatible constructor, mark as deprecated later
 fun buildDefaultClient(context: Context): OkHttpClient {
     return buildDefaultClient(context, false)
@@ -64,14 +76,7 @@ fun buildDefaultClient(context: Context, ignoreSSL: Boolean = false): OkHttpClie
                 ignoreAllSSLErrors()
             }
         }
-        .cache(
-            // Note that you need to add a ResponseInterceptor to make this 100% active.
-            // The server response dictates if and when stuff should be cached.
-            Cache(
-                directory = File(context.cacheDir, "http_cache"),
-                maxSize = 50L * 1024L * 1024L // 50 MiB
-            )
-        ).apply {
+        .cache(getSharedHttpCache(context)).apply {
             when (dns) {
                 1 -> addGoogleDns()
                 2 -> addCloudFlareDns()

@@ -48,6 +48,8 @@ data class TmdbLink(
     @JsonProperty("episode") @SerialName("episode") val episode: Int?,
     @JsonProperty("season") @SerialName("season") val season: Int?,
     @JsonProperty("movieName") @SerialName("movieName") val movieName: String? = null,
+    @JsonProperty("year") @SerialName("year") val year: Int? = null,
+    @JsonProperty("isAnime") @SerialName("isAnime") val isAnime: Boolean = false,
 )
 
 open class TmdbProvider : MainAPI() {
@@ -205,9 +207,14 @@ open class TmdbProvider : MainAPI() {
         @JsonProperty("recommendations") @SerialName("recommendations") val recommendations: TmdbPageResult? = null,
         @JsonProperty("similar") @SerialName("similar") val similar: TmdbPageResult? = null,
         @JsonProperty("content_ratings") @SerialName("content_ratings") val contentRatings: TmdbContentRatings? = null,
+        @JsonProperty("original_language") @SerialName("original_language") val originalLanguage: String? = null,
+        @JsonProperty("origin_country") @SerialName("origin_country") val originCountry: List<String>? = null,
     ) {
         @get:JsonIgnore val displayTitle get() = name ?: originalName ?: ""
         @get:JsonIgnore val year get() = firstAirDate?.take(4)?.toIntOrNull()
+        @get:JsonIgnore val isAnime get() = (genres?.any { it.name?.equals("Animation", ignoreCase = true) == true } == true &&
+            (originalLanguage == "ja" || originCountry?.contains("JP") == true)) ||
+            genres?.any { it.name?.contains("Anime", ignoreCase = true) == true } == true
     }
 
     @Serializable
@@ -228,9 +235,14 @@ open class TmdbProvider : MainAPI() {
         @JsonProperty("recommendations") @SerialName("recommendations") val recommendations: TmdbPageResult? = null,
         @JsonProperty("similar") @SerialName("similar") val similar: TmdbPageResult? = null,
         @JsonProperty("release_dates") @SerialName("release_dates") val releaseDates: TmdbReleaseDates? = null,
+        @JsonProperty("original_language") @SerialName("original_language") val originalLanguage: String? = null,
+        @JsonProperty("origin_country") @SerialName("origin_country") val originCountry: List<String>? = null,
     ) {
         @get:JsonIgnore val displayTitle get() = title ?: originalTitle ?: ""
         @get:JsonIgnore val year get() = releaseDate?.take(4)?.toIntOrNull()
+        @get:JsonIgnore val isAnime get() = (genres?.any { it.name?.equals("Animation", ignoreCase = true) == true } == true &&
+            (originalLanguage == "ja" || originCountry?.contains("JP") == true)) ||
+            genres?.any { it.name?.contains("Anime", ignoreCase = true) == true } == true
     }
 
     private fun getImageUrl(link: String?): String? {
@@ -338,6 +350,8 @@ open class TmdbProvider : MainAPI() {
                         episode.episodeNumber,
                         episode.seasonNumber,
                         displayTitle,
+                        this@toLoadResponse.year,
+                        this@toLoadResponse.isAnime,
                     ).toJson()
                 ) {
                     this.name = episode.name
@@ -354,7 +368,7 @@ open class TmdbProvider : MainAPI() {
         return newTvSeriesLoadResponse(
             displayTitle,
             getUrl(id, true),
-            TvType.TvSeries,
+            if (this@toLoadResponse.isAnime) TvType.Anime else TvType.TvSeries,
             episodes,
         ) {
             posterUrl = getImageUrl(posterPath)
@@ -377,13 +391,15 @@ open class TmdbProvider : MainAPI() {
         return newMovieLoadResponse(
             displayTitle,
             getUrl(id, false),
-            TvType.Movie,
+            if (this@toLoadResponse.isAnime) TvType.AnimeMovie else TvType.Movie,
             TmdbLink(
                 imdbId ?: externalIds?.imdbId,
                 id,
                 null,
                 null,
                 displayTitle,
+                this@toLoadResponse.year,
+                this@toLoadResponse.isAnime,
             ).toJson()
         ) {
             posterUrl = getImageUrl(posterPath)
@@ -409,6 +425,7 @@ open class TmdbProvider : MainAPI() {
         var trendingSeries: List<TvSeriesSearchResponse> = listOf()
         var discoverMovies: List<MovieSearchResponse> = listOf()
         var discoverSeries: List<TvSeriesSearchResponse> = listOf()
+        var popularAnime: List<TvSeriesSearchResponse> = listOf()
         var topMovies: List<MovieSearchResponse> = listOf()
         var topSeries: List<TvSeriesSearchResponse> = listOf()
         runAllAsync(
@@ -433,6 +450,17 @@ open class TmdbProvider : MainAPI() {
                 ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
             },
             {
+                popularAnime = parseJson<TmdbPageResult>(
+                    getApi("/discover/tv", mapOf(
+                        "page" to "$page",
+                        "with_genres" to "16",
+                        "with_original_language" to "ja",
+                        "include_adult" to "$includeAdult",
+                        "sort_by" to "popularity.desc"
+                    ))
+                ).results?.map { it.toSearchResponse() as TvSeriesSearchResponse } ?: listOf()
+            },
+            {
                 topMovies = parseJson<TmdbPageResult>(
                     getApi("/movie/top_rated", mapOf("page" to "$page", "language" to "en-US", "region" to "US", "include_adult" to "$includeAdult"))
                 ).results?.map { it.toSearchResponse() as MovieSearchResponse } ?: listOf()
@@ -449,6 +477,7 @@ open class TmdbProvider : MainAPI() {
         if (trendingSeries.isNotEmpty()) lists.add(HomePageList("Trending Series", trendingSeries))
         if (discoverMovies.isNotEmpty()) lists.add(HomePageList("Popular Movies", discoverMovies))
         if (discoverSeries.isNotEmpty()) lists.add(HomePageList("Popular Series", discoverSeries))
+        if (popularAnime.isNotEmpty()) lists.add(HomePageList("Popular Anime", popularAnime))
         if (topMovies.isNotEmpty()) lists.add(HomePageList("Top Movies", topMovies))
         if (topSeries.isNotEmpty()) lists.add(HomePageList("Top Series", topSeries))
 

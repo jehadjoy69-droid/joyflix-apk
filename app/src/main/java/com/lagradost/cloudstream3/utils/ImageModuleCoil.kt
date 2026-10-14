@@ -37,9 +37,34 @@ import java.nio.ByteBuffer
 
 object ImageLoader {
     private const val TAG = "CoilImgLoader"
+    private var sharedImageOkHttpClient: okhttp3.OkHttpClient? = null
+
+    private fun getImageClient(context: PlatformContext): okhttp3.OkHttpClient {
+        return sharedImageOkHttpClient ?: synchronized(this) {
+            sharedImageOkHttpClient ?: run {
+                val base = try {
+                    com.lagradost.cloudstream3.app.baseClient
+                } catch (_: Throwable) {
+                    null
+                } ?: buildDefaultClient(context)
+
+                // Share connection pool but remove OkHttp disk cache.
+                // Coil already manages its own diskCache (cs3_image_cache) - removing OkHttp's
+                // duplicate DiskLruCache prevents double caching, prevents thousands of OkHttp threads,
+                // and prevents U_MEMORY_ALLOCATION_ERROR crashes on low-RAM Smart TVs.
+                base.newBuilder()
+                    .cache(null)
+                    .build()
+                    .also { sharedImageOkHttpClient = it }
+            }
+        }
+    }
+
     internal fun buildImageLoader(context: PlatformContext): ImageLoader {
         val isBrokenHardware = hasPotentialBrokenHardware()
         val isLowRam = context.isLowRamDevice()
+        val okHttpClient = getImageClient(context)
+
         return ImageLoader.Builder(context)
             .crossfade(if (isLowRam) 0 else 200)
             .allowHardware(SDK_INT >= 28 && !isBrokenHardware)
@@ -61,7 +86,7 @@ object ImageLoader {
             /** Pass interceptors with care, unnecessary passing tokens to servers
             or image hosting services causes unauthorized exceptions **/
             .components {
-                add(OkHttpNetworkFetcherFactory(callFactory = { buildDefaultClient(context) }))
+                add(OkHttpNetworkFetcherFactory(callFactory = { okHttpClient }))
                 if (isBrokenHardware || isLowRam) {
                     add(BitmapFactoryDecoder.Factory())
                 } // sw decoder
