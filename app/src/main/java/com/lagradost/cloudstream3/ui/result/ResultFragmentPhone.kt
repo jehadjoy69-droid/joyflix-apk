@@ -1056,6 +1056,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
                 binding.resultBookmarkFab.isVisible = data is Resource.Success
                 resultFinishLoading.isVisible = data is Resource.Success
+                resultSourcesButton.isVisible = data is Resource.Success
 
                 resultLoading.isVisible = data is Resource.Loading
 
@@ -1423,15 +1424,12 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                         {}) { itemId ->
                         viewModel.changeSeason(names[itemId].first)
                     }
-
-
-                    //view.popupMenuNoIconsAndNoStringRes(names.mapIndexed { index, (_, name) ->
-                    //    index to name
-                    //}) {
-                    //    viewModel.changeSeason(names[itemId].first)
-                    //}
                 }
             }
+        }
+
+        resultBinding?.resultSourcesButton?.setOnClickListener {
+            viewModel.showSourcesDialog(activity)
         }
     }
 

@@ -805,13 +805,30 @@
                                     android:layout_marginBottom="10dp"
                                     android:drawableEnd="@drawable/ic_baseline_keyboard_arrow_down_24"
                                     android:nextFocusLeft="@id/result_season_button"
-                                    android:nextFocusRight="@id/result_season_button"
+                                    android:nextFocusRight="@id/result_sources_button"
                                     android:nextFocusUp="@id/result_description"
                                     android:nextFocusDown="@id/result_episodes"
                                     android:paddingStart="10dp"
                                     android:paddingEnd="5dp"
                                     android:visibility="gone"
                                     tools:text="50-100"
+                                    tools:visibility="visible" />
+
+                                <com.google.android.material.button.MaterialButton
+                                    android:id="@+id/result_sources_button"
+                                    style="@style/MultiSelectButton"
+                                    android:layout_gravity="center_vertical"
+                                    android:layout_marginTop="10dp"
+                                    android:layout_marginBottom="10dp"
+                                    app:icon="@drawable/ic_baseline_ondemand_video_24"
+                                    android:text="@string/sources"
+                                    android:nextFocusLeft="@id/result_episode_select"
+                                    android:nextFocusRight="@id/result_dub_select"
+                                    android:nextFocusUp="@id/result_description"
+                                    android:nextFocusDown="@id/result_episodes"
+                                    android:paddingStart="10dp"
+                                    android:paddingEnd="10dp"
+                                    android:visibility="gone"
                                     tools:visibility="visible" />
 
                                 <com.google.android.material.button.MaterialButton

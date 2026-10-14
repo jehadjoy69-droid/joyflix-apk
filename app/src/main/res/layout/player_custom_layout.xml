@@ -1559,6 +1559,19 @@
                 android:textStyle="bold"
                 android:textSize="14sp" />
 
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_horizontal_sources"
+                style="@style/MultiSelectButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="8dp"
+                android:text="@string/sources"
+                android:textSize="12sp"
+                app:icon="@drawable/ic_baseline_ondemand_video_24"
+                app:iconSize="16dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
+
             <!-- Host Sync Indicator Badge -->
             <TextView
                 android:id="@+id/tv_host_sync_badge"

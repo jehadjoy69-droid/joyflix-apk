@@ -2319,6 +2319,9 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             btnHorizontalEpisodesClose.setOnClickListener {
                 toggleEpisodesOverlay(show = false)
             }
+            btnHorizontalSources.setOnClickListener {
+                showMirrorsDialogue()
+            }
         }
         // init UI
         try {

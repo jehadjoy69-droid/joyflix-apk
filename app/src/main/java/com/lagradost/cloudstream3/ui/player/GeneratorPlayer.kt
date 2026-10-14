@@ -73,6 +73,7 @@ import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.mvvm.observeNullable
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.ui.SyncWatchType
+import com.lagradost.cloudstream3.ui.result.StreamSourcesDialogFragment
 import com.lagradost.cloudstream3.subtitles.AbstractSubtitleEntities
 import com.lagradost.cloudstream3.subtitles.AbstractSubtitleEntities.SubtitleSearch
 import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.subtitleProviders
@@ -501,6 +502,12 @@ class GeneratorPlayer : FullScreenPlayer() {
             playerBinding?.downloadedProgressSpeedText?.isGone =
                 event.downloadedBytes != 0L && event.downloadedBytes - 1024 >= event.totalBytes
         }
+    }
+
+    fun selectSpecificLink(link: com.lagradost.cloudstream3.utils.ExtractorLink) {
+        val videoLink = link to null
+        viewModel.modifyState { add(videoLink) }
+        loadLink(videoLink, sameEpisode = true)
     }
 
     private fun loadLink(link: VideoLink?, sameEpisode: Boolean) {
@@ -1020,6 +1027,32 @@ class GeneratorPlayer : FullScreenPlayer() {
 
 
     override fun showMirrorsDialogue() {
+        val currentEp = (currentMeta as? ResultEpisode) ?: allMeta?.firstOrNull()
+        val currentResp = viewModel.state.generatorState?.response
+        val act = activity
+        val isTmdb = currentResp?.apiName == "JoyFlix Discover" ||
+            currentResp?.apiName == "TMDB" ||
+            currentResp?.syncData?.containsKey("tmdb") == true ||
+            currentEp?.data?.contains("themoviedb") == true ||
+            currentEp?.data?.contains("tmdbID") == true ||
+            currentResp?.url?.contains("themoviedb.org") == true
+
+        if (isTmdb && currentEp != null && act is androidx.fragment.app.FragmentActivity) {
+            val list = HashMap<String, String>(currentResp?.syncData ?: emptyMap())
+            val gen = (viewModel.generator as? RepoLinkGenerator)
+                ?: RepoLinkGenerator(listOf(currentEp), page = currentResp)
+            val index = viewModel.state.generatorState?.index ?: 0
+            StreamSourcesDialogFragment.show(
+                act,
+                currentEp,
+                currentResp,
+                gen,
+                index,
+                list
+            )
+            return
+        }
+
         try {
             currentSelectedSubtitles = player.getCurrentPreferredSubtitle()
             //println("CURRENT SELECTED :$currentSelectedSubtitles of $currentSubs")

@@ -49,6 +49,50 @@ import java.util.Collections
 import java.util.concurrent.ConcurrentHashMap
 import java.util.concurrent.CopyOnWriteArrayList
 
+object StreamSourcesCache {
+    data class CacheEntry(
+        val activeScrapers: List<String>,
+        val providerLinks: Map<String, List<ExtractorLink>>,
+        val allLoadedLinks: List<ExtractorLink>,
+        val allLoadedSubs: List<SubtitleData>,
+        val timestamp: Long = System.currentTimeMillis()
+    )
+
+    val cache = ConcurrentHashMap<String, CacheEntry>()
+
+    fun getCacheKey(episode: ResultEpisode?, response: LoadResponse?): String {
+        val parsedLink = tryParseJson<TmdbLink>(episode?.data ?: "")
+            ?: tryParseJson<TmdbLink>((response as? MovieLoadResponse)?.dataUrl ?: "")
+        val tmdbId = parsedLink?.tmdbID?.toString()
+            ?: Regex("""themoviedb\.org/(?:movie|tv)/(\d+)""").find(response?.url ?: episode?.data ?: "")
+                ?.groupValues?.getOrNull(1)
+            ?: response?.syncData?.get("tmdb")
+            ?: (response?.url?.hashCode()?.toString())
+            ?: (episode?.id?.toString())
+            ?: "default"
+        val season = parsedLink?.season ?: episode?.season ?: 0
+        val ep = parsedLink?.episode ?: episode?.episode ?: 0
+        return "${tmdbId}_s${season}_e${ep}"
+    }
+
+    fun get(key: String): CacheEntry? {
+        val entry = cache[key] ?: return null
+        if (System.currentTimeMillis() - entry.timestamp > 30 * 60 * 1000) {
+            cache.remove(key)
+            return null
+        }
+        return entry
+    }
+
+    fun set(key: String, entry: CacheEntry) {
+        cache[key] = entry
+    }
+
+    fun clear(key: String) {
+        cache.remove(key)
+    }
+}
+
 class StreamSourcesDialogFragment : DialogFragment() {
 
     companion object {
@@ -94,6 +138,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
     private var updateJob: Job? = null
     private var isScrapingComplete: Boolean = false
     private var selectedFilter: String? = null // null = "All"
+    private var currentCacheKey: String = ""
 
     private val activeScrapers = Collections.synchronizedSet(LinkedHashSet<String>())
     private val fetchingScrapers = ConcurrentHashMap.newKeySet<String>()
@@ -219,7 +264,13 @@ class StreamSourcesDialogFragment : DialogFragment() {
         loadingIndicator?.isVisible = true
         emptyView?.isVisible = false
 
+        val rawEpisode = currentEpisode ?: return
+        val resp = currentResponse
+        val cacheKey = StreamSourcesCache.getCacheKey(rawEpisode, resp)
+        currentCacheKey = cacheKey
+
         if (forceRefresh) {
+            StreamSourcesCache.clear(cacheKey)
             providerLinks.clear()
             allLoadedLinks.clear()
             allLoadedSubs.clear()
@@ -229,10 +280,29 @@ class StreamSourcesDialogFragment : DialogFragment() {
             scrapersContainer?.removeAllViews()
             renderFilterChips()
             renderSourcesList()
+        } else {
+            // Check cache: if links were already fetched, display immediately without fetching again!
+            val cached = StreamSourcesCache.get(cacheKey)
+            if (cached != null && cached.allLoadedLinks.isNotEmpty()) {
+                activeScrapers.clear()
+                activeScrapers.addAll(cached.activeScrapers)
+                providerLinks.clear()
+                cached.providerLinks.forEach { (k, v) ->
+                    providerLinks[k] = CopyOnWriteArrayList(v)
+                }
+                allLoadedLinks.clear()
+                allLoadedLinks.addAll(cached.allLoadedLinks)
+                allLoadedSubs.clear()
+                allLoadedSubs.addAll(cached.allLoadedSubs)
+                fetchingScrapers.clear()
+                isScrapingComplete = true
+                loadingIndicator?.isVisible = false
+                renderActiveScrapersUi()
+                renderFilterChips()
+                renderSourcesList()
+                return
+            }
         }
-
-        val rawEpisode = currentEpisode ?: return
-        val resp = currentResponse
 
         // Construct safe TmdbLink if raw data is not JSON or is missing title/year/tmdbID
         val parsedTmdbLink = tryParseJson<TmdbLink>(rawEpisode.data)
@@ -324,6 +394,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
                     loadingIndicator?.isVisible = false
                     fetchingScrapers.clear()
                     updateJob?.cancel()
+                    saveCurrentCache()
                     renderFilterChips()
                     renderSourcesList()
                 }
@@ -351,7 +422,23 @@ class StreamSourcesDialogFragment : DialogFragment() {
         list.add(link)
         fetchingScrapers.remove(provider)
 
+        saveCurrentCache()
         scheduleUiUpdate()
+    }
+
+    private fun saveCurrentCache() {
+        val key = currentCacheKey.ifBlank {
+            StreamSourcesCache.getCacheKey(currentEpisode, currentResponse)
+        }
+        StreamSourcesCache.set(
+            key,
+            StreamSourcesCache.CacheEntry(
+                activeScrapers = synchronized(activeScrapers) { activeScrapers.toList() },
+                providerLinks = providerLinks.mapValues { it.value.toList() },
+                allLoadedLinks = allLoadedLinks.toList(),
+                allLoadedSubs = allLoadedSubs.toList()
+            )
+        )
     }
 
     private fun scheduleUiUpdate(delayMs: Long = 120L) {
@@ -491,6 +578,8 @@ class StreamSourcesDialogFragment : DialogFragment() {
         val episode = currentEpisode ?: return
         val generator = currentGenerator ?: RepoLinkGenerator(listOf(episode), page = currentResponse)
 
+        saveCurrentCache()
+
         // 1. Populate RepoLinkGenerator.cache with selected link first!
         synchronized(RepoLinkGenerator.cache) {
             val keysToCache = setOf(
@@ -518,7 +607,19 @@ class StreamSourcesDialogFragment : DialogFragment() {
         // 2. Dismiss dialog
         dismissAllowingStateLoss()
 
-        // 3. Start generator player!
+        // 3. If player is already active, switch link directly in-player!
+        val currentActivity = act
+        if (currentActivity is androidx.fragment.app.FragmentActivity) {
+            val navHost = currentActivity.supportFragmentManager.findFragmentById(R.id.nav_host_fragment)
+            val currentFrag = navHost?.childFragmentManager?.fragments?.filterIsInstance<GeneratorPlayer>()?.lastOrNull()
+                ?: currentActivity.supportFragmentManager.fragments.filterIsInstance<GeneratorPlayer>().lastOrNull()
+            if (currentFrag != null) {
+                currentFrag.selectSpecificLink(selectedLink)
+                return
+            }
+        }
+
+        // 4. Otherwise start generator player!
         act.navigate(
             R.id.global_to_navigation_player,
             GeneratorPlayer.newInstance(

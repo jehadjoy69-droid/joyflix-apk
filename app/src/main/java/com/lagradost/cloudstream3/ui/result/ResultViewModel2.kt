@@ -1226,6 +1226,32 @@ class ResultViewModel2 : ViewModel() {
         }
     }
 
+    fun getActiveEpisode(): ResultEpisode? {
+        return resumeWatching.value?.result
+            ?: (movie.value as? Resource.Success)?.value?.second
+            ?: (episodes.value as? Resource.Success)?.value?.firstOrNull()
+            ?: (generator?.videos?.firstOrNull() as? ResultEpisode)
+            ?: getMovie()
+    }
+
+    fun showSourcesDialog(act: androidx.fragment.app.FragmentActivity?) {
+        if (act == null) return
+        val episode = getActiveEpisode() ?: return
+        val resp = currentResponse
+        val gen = generator ?: RepoLinkGenerator(listOf(episode), page = resp)
+        val list = HashMap<String, String>(resp?.syncData ?: emptyMap())
+        val rawIndex = gen.videos.indexOfFirst { it.id == episode.id }
+        val index = if (rawIndex < 0) 0 else rawIndex
+        StreamSourcesDialogFragment.show(
+            act,
+            episode,
+            resp,
+            gen,
+            index,
+            list
+        )
+    }
+
     private var currentLoadLinkJob: Job? = null
     private fun acquireSingleLink(
         result: ResultEpisode,
