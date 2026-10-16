@@ -12,8 +12,8 @@ document.addEventListener('DOMContentLoaded', () => {
     // 2. Background Stardust Canvas
     initCinemaParticles();
 
-    // 3. GitHub Latest Release Fetching
-    fetchLatestGitHubRelease();
+    // 3. Cloudflare Latest Release Fetching (Android & Windows)
+    fetchLatestCloudflareRelease();
 
     // 4. Interactive Live Watch Party Simulator & Reaction Engine
     initPlayerSimulator();
@@ -85,70 +85,70 @@ function initCinemaParticles() {
 }
 
 /**
- * Fetches Latest Release from GitHub API
+ * Fetches Latest Release from Cloudflare Worker API (Android & Windows)
  */
-async function fetchLatestGitHubRelease() {
-    const GITHUB_REPO = 'jehadjoy15-stack/joyflix-cloud';
-    const apiUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases/latest`;
-    const fallbackReleasesUrl = `https://api.github.com/repos/${GITHUB_REPO}/releases`;
+async function fetchLatestCloudflareRelease() {
+    const apiUrl = 'https://version.jehadjoy69.workers.dev/';
 
     const primaryBtn = document.getElementById('primaryDownloadBtn');
     const secondaryBtn = document.getElementById('secondaryDownloadBtn');
+    const windowsBtn = document.getElementById('windowsDownloadBtn');
+    const secondaryWinBtn = document.getElementById('secondaryWinDownloadBtn');
     const pillVersion = document.getElementById('pillVersion');
     const btnVersionBadge = document.getElementById('btnVersionBadge');
     const btnSizeBadge = document.getElementById('btnSizeBadge');
+    const btnWinVersionBadge = document.getElementById('btnWinVersionBadge');
+    const btnWinSizeBadge = document.getElementById('btnWinSizeBadge');
+    const qrImage = document.querySelector('.qr-image');
+    const qrDirectLink = document.querySelector('.modal-footer-link a');
     const dynVersions = document.querySelectorAll('.dyn-version');
 
     try {
-        let release = null;
-        let response = await fetch(apiUrl);
-        
-        if (response.ok) {
-            release = await response.json();
-        } else {
-            const listRes = await fetch(fallbackReleasesUrl);
-            if (listRes.ok) {
-                const releasesList = await listRes.json();
-                release = releasesList.find(r => !r.prerelease) || releasesList[0];
+        const response = await fetch(apiUrl);
+        if (!response.ok) throw new Error('Worker response was not ok');
+        const data = await response.json();
+
+        // 1. Android Release
+        if (data.android) {
+            const androidVer = data.android.version || '5.0.12';
+            const androidTag = androidVer.startsWith('v') ? androidVer : `v${androidVer}`;
+            const cleanAndroidVer = androidVer.replace(/^v/i, '');
+            const androidUrl = data.android.downloadUrl || 'https://joyflix.fun/download/JOYFLIX.apk';
+            const androidSize = data.android.size ? `${(data.android.size / (1024 * 1024)).toFixed(1)} MB` : '3.3 MB';
+
+            if (primaryBtn) primaryBtn.href = androidUrl;
+            if (secondaryBtn) secondaryBtn.href = androidUrl;
+            if (pillVersion) pillVersion.textContent = cleanAndroidVer;
+            if (btnVersionBadge) btnVersionBadge.textContent = androidTag;
+            if (btnSizeBadge) btnSizeBadge.textContent = androidSize;
+
+            if (qrImage) {
+                qrImage.src = `https://api.qrserver.com/v1/create-qr-code/?size=220x220&data=${encodeURIComponent(androidUrl)}&color=E50914&bgcolor=0E1017`;
             }
-        }
-
-        if (release) {
-            const rawTag = release.tag_name || 'v5.0.1';
-            const cleanVersion = rawTag.replace(/^v/i, '');
-            const displayTag = rawTag.startsWith('v') ? rawTag : `v${rawTag}`;
-
-            // Find APK asset
-            const apkAsset = release.assets && release.assets.find(asset => 
-                asset.name.toLowerCase().endsWith('.apk')
-            );
-
-            let downloadUrl = release.html_url;
-            let formattedSize = '73.7 MB';
-
-            if (apkAsset) {
-                downloadUrl = apkAsset.browser_download_url;
-                if (apkAsset.size) {
-                    const mb = (apkAsset.size / (1024 * 1024)).toFixed(1);
-                    formattedSize = `${mb} MB`;
-                }
-            } else {
-                downloadUrl = `https://github.com/${GITHUB_REPO}/releases/download/${displayTag}/JoyFlix-${cleanVersion}.apk`;
+            if (qrDirectLink) {
+                qrDirectLink.href = androidUrl;
+                qrDirectLink.textContent = `Download JoyFlix ${androidTag} APK`;
             }
-
-            // Update UI elements
-            if (primaryBtn) primaryBtn.href = downloadUrl;
-            if (secondaryBtn) secondaryBtn.href = downloadUrl;
-            if (pillVersion) pillVersion.textContent = cleanVersion;
-            if (btnVersionBadge) btnVersionBadge.textContent = displayTag;
-            if (btnSizeBadge) btnSizeBadge.textContent = formattedSize;
 
             dynVersions.forEach(span => {
-                span.textContent = span.textContent.startsWith('v') ? displayTag : cleanVersion;
+                span.textContent = span.textContent.startsWith('v') ? androidTag : cleanAndroidVer;
             });
         }
+
+        // 2. Windows PC Release
+        if (data.windows) {
+            const winVer = data.windows.version || '5.0.10';
+            const winTag = winVer.startsWith('v') ? winVer : `v${winVer}`;
+            const winUrl = data.windows.downloadUrl || 'https://joyflix.fun/download/JoyFlix-Windows-x64.msi';
+            const winSize = data.windows.size ? `${(data.windows.size / (1024 * 1024)).toFixed(0)} MB` : '190 MB';
+
+            if (windowsBtn) windowsBtn.href = winUrl;
+            if (secondaryWinBtn) secondaryWinBtn.href = winUrl;
+            if (btnWinVersionBadge) btnWinVersionBadge.textContent = winTag;
+            if (btnWinSizeBadge) btnWinSizeBadge.textContent = winSize;
+        }
     } catch (e) {
-        console.warn('Using default v4.8.8 release info:', e);
+        console.warn('Using default Cloudflare release fallback:', e);
     }
 }
 
