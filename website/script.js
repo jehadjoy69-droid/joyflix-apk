@@ -113,8 +113,8 @@ async function fetchLatestCloudflareRelease() {
             const androidVer = data.android.version || '5.0.12';
             const androidTag = androidVer.startsWith('v') ? androidVer : `v${androidVer}`;
             const cleanAndroidVer = androidVer.replace(/^v/i, '');
-            const androidUrl = data.android.downloadUrl || 'https://joyflix.fun/download/JOYFLIX.apk';
-            const androidSize = data.android.size ? `${(data.android.size / (1024 * 1024)).toFixed(1)} MB` : '3.3 MB';
+            const androidUrl = data.android.downloadUrl || 'https://github.com/jehadjoy69-droid/joyflix-apk/releases/download/v5.0.12/JoyFlix-v5.0.12.apk';
+            const androidSize = data.android.size ? `${(data.android.size / (1024 * 1024)).toFixed(1)} MB` : '77.4 MB';
 
             if (primaryBtn) primaryBtn.href = androidUrl;
             if (secondaryBtn) secondaryBtn.href = androidUrl;
@@ -139,7 +139,7 @@ async function fetchLatestCloudflareRelease() {
         if (data.windows) {
             const winVer = data.windows.version || '5.0.10';
             const winTag = winVer.startsWith('v') ? winVer : `v${winVer}`;
-            const winUrl = data.windows.downloadUrl || 'https://joyflix.fun/download/JoyFlix-Windows-x64.msi';
+            const winUrl = data.windows.downloadUrl || 'https://github.com/jehadjoy69-droid/joyflix-apk/releases/download/v5.0.12/JoyFlix-Windows-x64-5.0.10.msi';
             const winSize = data.windows.size ? `${(data.windows.size / (1024 * 1024)).toFixed(0)} MB` : '190 MB';
 
             if (windowsBtn) windowsBtn.href = winUrl;
