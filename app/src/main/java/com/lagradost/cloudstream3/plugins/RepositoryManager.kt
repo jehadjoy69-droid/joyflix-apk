@@ -97,7 +97,7 @@ data class PluginWrapper(
 
 object RepositoryManager {
     const val ONLINE_PLUGINS_FOLDER = "Extensions"
-    const val DEFAULT_REPOSITORY_URL = "https://raw.githubusercontent.com/jehadjoy15-stack/joyflix-cloud/main/repo.json"
+    const val DEFAULT_REPOSITORY_URL = "https://joyflix-api.jehadjoy69.workers.dev/"
     val DEFAULT_REPOSITORY = RepositoryData(
         name = "JoyFlix Official",
         url = DEFAULT_REPOSITORY_URL
@@ -106,7 +106,14 @@ object RepositoryManager {
     val PREBUILT_REPOSITORIES: Array<RepositoryData> by lazy {
         val custom = getKey<Array<RepositoryData>>("PREBUILT_REPOSITORIES")
         if (!custom.isNullOrEmpty()) {
-            custom
+            custom.map { repo ->
+                if (repo.url.contains("jehadjoy15-stack/joyflix-cloud/main/repo.json") ||
+                    (repo.url.contains("joyflix-cloud") && repo.url.contains("repo.json"))) {
+                    repo.copy(url = DEFAULT_REPOSITORY_URL)
+                } else {
+                    repo
+                }
+            }.toTypedArray()
         } else {
             arrayOf(DEFAULT_REPOSITORY)
         }
@@ -310,7 +317,13 @@ object RepositoryManager {
         return if (repos.isNullOrEmpty()) {
             arrayOf(DEFAULT_REPOSITORY)
         } else {
-            (repos + DEFAULT_REPOSITORY).distinctBy { it.url }.toTypedArray()
+            val updated = repos.map { repo ->
+                if (repo.url.contains("jehadjoy15-stack/joyflix-cloud/main/repo.json") ||
+                    (repo.url.contains("joyflix-cloud") && repo.url.contains("repo.json"))) {
+                    repo.copy(url = DEFAULT_REPOSITORY_URL)
+                } else repo
+            }
+            (updated + DEFAULT_REPOSITORY).distinctBy { it.url }.toTypedArray()
         }
     }
 
