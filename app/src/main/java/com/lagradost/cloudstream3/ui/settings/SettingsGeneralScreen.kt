@@ -244,10 +244,10 @@ object SettingsGeneralScreen : SearchableSettings {
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(R.string.github),
-                        subtitle = "https://github.com/jehadjoy15-stack/joyflix-cloud",
+                        subtitle = "https://github.com/jehadjoy69-droid/joyflix-apk",
                         icon = painterResource(R.drawable.ic_github_logo),
                         onClick = {
-                            CloudStreamApp.openBrowser("https://github.com/jehadjoy15-stack/joyflix-cloud")
+                            CloudStreamApp.openBrowser("https://github.com/jehadjoy69-droid/joyflix-apk")
                         }
                     ),
                     Preference.PreferenceItem.TextPreference(

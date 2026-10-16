@@ -162,6 +162,7 @@ import com.lagradost.cloudstream3.utils.DataStoreHelper.accounts
 import com.lagradost.cloudstream3.utils.DataStoreHelper.migrateResumeWatching
 import com.lagradost.cloudstream3.utils.Event
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
+import com.lagradost.cloudstream3.utils.InAppUpdater.checkPopupNotice
 import com.lagradost.cloudstream3.utils.InAppUpdater.runAutoUpdate
 import com.lagradost.cloudstream3.utils.SingleSelectionHelper.showBottomDialog
 import com.lagradost.cloudstream3.utils.SnackbarHelper.showSnackbar
@@ -1999,7 +2000,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         handleAppIntent(intent)
 
         ioSafe {
-            runAutoUpdate() // TODO remove this when we update the updater autosearch
+            val noticeShown = checkPopupNotice()
+            if (!noticeShown) {
+                runAutoUpdate() // TODO remove this when we update the updater autosearch
+            }
         }
 
         FcastManager().init(this, false)

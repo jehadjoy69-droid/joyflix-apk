@@ -23,6 +23,7 @@ import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.services.PackageInstallerService
 import com.lagradost.cloudstream3.utils.AppContextUtils.setDefaultFocus
 import com.lagradost.cloudstream3.utils.AppUtils.parseJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
 import com.lagradost.cloudstream3.utils.GitInfo.currentCommitHash
 import kotlinx.coroutines.sync.Mutex
@@ -38,40 +39,53 @@ import java.io.IOException
 import java.io.InputStreamReader
 
 object InAppUpdater {
-    private const val GITHUB_USER_NAME = "jehadjoy15-stack"
-    private const val GITHUB_REPO = "joyflix-cloud"
+    private const val ANDROID_UPDATER_URL = "https://version.jehadjoy69.workers.dev/android"
+    private const val NOTICE_URL = "https://version.jehadjoy69.workers.dev/notice"
 
     private const val PRERELEASE_PACKAGE_NAME = "com.joyflix.app.prerelease"
     private const val LOG_TAG = "InAppUpdater"
 
     @Serializable
     private data class GithubAsset(
-        @JsonProperty("name") @SerialName("name") val name: String,
-        @JsonProperty("size") @SerialName("size") val size: Int, // Size in bytes
-        @JsonProperty("browser_download_url") @SerialName("browser_download_url") val browserDownloadUrl: String,
-        @JsonProperty("content_type") @SerialName("content_type") val contentType: String, // application/vnd.android.package-archive
+        @JsonProperty("name") @SerialName("name") val name: String = "",
+        @JsonProperty("size") @SerialName("size") val size: Int = 0, // Size in bytes
+        @JsonProperty("browser_download_url") @SerialName("browser_download_url") val browserDownloadUrl: String = "",
+        @JsonProperty("content_type") @SerialName("content_type") val contentType: String = "application/vnd.android.package-archive", // application/vnd.android.package-archive
     )
 
     @Serializable
     private data class GithubRelease(
-        @JsonProperty("tag_name") @SerialName("tag_name") val tagName: String, // Version code
-        @JsonProperty("body") @SerialName("body") val body: String, // Description
-        @JsonProperty("assets") @SerialName("assets") val assets: List<GithubAsset>,
-        @JsonProperty("target_commitish") @SerialName("target_commitish") val targetCommitish: String, // Branch
-        @JsonProperty("prerelease") @SerialName("prerelease") val prerelease: Boolean,
-        @JsonProperty("node_id") @SerialName("node_id") val nodeId: String,
+        @JsonProperty("tag_name") @SerialName("tag_name") val tagName: String = "", // Version code
+        @JsonProperty("name") @SerialName("name") val name: String? = null,
+        @JsonProperty("body") @SerialName("body") val body: String? = "", // Description
+        @JsonProperty("assets") @SerialName("assets") val assets: List<GithubAsset> = emptyList(),
+        @JsonProperty("target_commitish") @SerialName("target_commitish") val targetCommitish: String? = null, // Branch
+        @JsonProperty("prerelease") @SerialName("prerelease") val prerelease: Boolean = false,
+        @JsonProperty("node_id") @SerialName("node_id") val nodeId: String? = null,
+    )
+
+    @Serializable
+    data class PopupNotice(
+        @JsonProperty("enabled") @SerialName("enabled") val enabled: Boolean = false,
+        @JsonProperty("version") @SerialName("version") val version: String? = null,
+        @JsonProperty("title") @SerialName("title") val title: String? = null,
+        @JsonProperty("message") @SerialName("message") val message: String? = null,
+        @JsonProperty("features") @SerialName("features") val features: List<String> = emptyList(),
+        @JsonProperty("buttonText") @SerialName("buttonText") val buttonText: String? = null,
+        @JsonProperty("downloadUrl") @SerialName("downloadUrl") val downloadUrl: String? = null,
+        @JsonProperty("remindLaterHours") @SerialName("remindLaterHours") val remindLaterHours: Long = 24L,
     )
 
     @Serializable
     private data class GithubObject(
-        @JsonProperty("sha") @SerialName("sha") val sha: String, // SHA-256 hash
-        @JsonProperty("type") @SerialName("type") val type: String,
-        @JsonProperty("url") @SerialName("url") val url: String,
+        @JsonProperty("sha") @SerialName("sha") val sha: String = "", // SHA-256 hash
+        @JsonProperty("type") @SerialName("type") val type: String = "",
+        @JsonProperty("url") @SerialName("url") val url: String = "",
     )
 
     @Serializable
     private data class GithubTag(
-        @JsonProperty("object") @SerialName("object") val githubObject: GithubObject,
+        @JsonProperty("object") @SerialName("object") val githubObject: GithubObject = GithubObject(),
     )
 
     @Serializable
@@ -93,15 +107,18 @@ object InAppUpdater {
     }
 
     private suspend fun Activity.getReleaseUpdate(): Update {
-        val url = "https://api.github.com/repos/$GITHUB_USER_NAME/$GITHUB_REPO/releases"
-        val headers = mapOf("Accept" to "application/vnd.github.v3+json")
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Android; Mobile; JoyFlix)",
+            "Accept" to "application/json"
+        )
         val responseText = try {
-            app.get(url, headers = headers).text
+            app.get(ANDROID_UPDATER_URL, headers = headers).text
         } catch (_: Exception) {
             return Update(false, null, null, null, null)
         }
         val response = try {
-            parseJson<Array<GithubRelease>>(responseText).toList()
+            tryParseJson<GithubRelease>(responseText)?.let { listOf(it) }
+                ?: parseJson<Array<GithubRelease>>(responseText).toList()
         } catch (_: Exception) {
             return Update(false, null, null, null, null)
         }
@@ -151,42 +168,12 @@ object InAppUpdater {
             foundAsset.browserDownloadUrl,
             displayVersion,
             found.body,
-            found.nodeId
+            found.nodeId ?: displayVersion
         )
     }
 
     private suspend fun Activity.getPreReleaseUpdate(): Update {
-        val tagUrl =
-            "https://api.github.com/repos/$GITHUB_USER_NAME/$GITHUB_REPO/git/ref/tags/pre-release"
-        val releaseUrl = "https://api.github.com/repos/$GITHUB_USER_NAME/$GITHUB_REPO/releases"
-        val headers = mapOf("Accept" to "application/vnd.github.v3+json")
-        val response = parseJson<Array<GithubRelease>>(
-            app.get(releaseUrl, headers = headers).text
-        ).toList()
-
-        val found = response.lastOrNull { rel ->
-            rel.prerelease || rel.tagName == "pre-release"
-        }
-
-        val foundAsset = found?.assets?.filter { it ->
-            it.contentType == "application/vnd.android.package-archive"
-        }?.getOrNull(0)
-
-        if (foundAsset == null) {
-            return Update(false, null, null, null, null)
-        }
-
-        val tagResponse = parseJson<GithubTag>(app.get(tagUrl, headers = headers).text)
-        val updateCommitHash = tagResponse.githubObject.sha.trim().take(7)
-        Log.d(LOG_TAG, "Fetched GitHub tag: $updateCommitHash")
-
-        return Update(
-            currentCommitHash() != updateCommitHash,
-            foundAsset.browserDownloadUrl,
-            updateCommitHash,
-            found.body,
-            found.nodeId
-        )
+        return getReleaseUpdate()
     }
 
     private val updateLock = Mutex()
@@ -299,51 +286,7 @@ object InAppUpdater {
                 builder.setMessage(sanitizedChangelog)
                 builder.apply {
                     setPositiveButton(R.string.update) { _, _ ->
-                        // Forcefully start any delayed installations
-                        if (ApkInstaller.delayedInstaller?.startInstallation() == true) return@setPositiveButton
-
-                        showToast(R.string.download_started, Toast.LENGTH_LONG)
-
-                        // Check if the setting hasn't been changed
-                        if (settingsManager.getInt(
-                                getString(R.string.apk_installer_key), -1
-                            ) == -1
-                        ) {
-                            // Set to legacy installer if using MIUI
-                            if (isMiUi()) {
-                                settingsManager.edit {
-                                    putInt(getString(R.string.apk_installer_key), 1)
-                                }
-                            }
-                        }
-
-                        val currentInstaller = settingsManager.getInt(
-                            getString(R.string.apk_installer_key), 1
-                        )
-
-                        when (currentInstaller) {
-                            // New method
-                            0 -> {
-                                val intent = PackageInstallerService.Companion.getIntent(
-                                    this@runAutoUpdate, update.updateURL
-                                )
-                                ContextCompat.startForegroundService(
-                                    this@runAutoUpdate, intent
-                                )
-                            }
-                            // Legacy
-                            1 -> {
-                                ioSafe {
-                                    if (!downloadUpdate(update.updateURL)) {
-                                        runOnUiThread {
-                                            showToast(
-                                                R.string.download_failed, Toast.LENGTH_LONG
-                                            )
-                                        }
-                                    }
-                                }
-                            }
-                        }
+                        startUpdateDownload(update.updateURL)
                     }
 
                     setNegativeButton(R.string.cancel) { _, _ -> }
@@ -358,6 +301,156 @@ object InAppUpdater {
                         }
                     }
                 }
+                builder.show().setDefaultFocus()
+            }
+        }
+        return true
+    }
+
+    private fun Activity.startUpdateDownload(downloadUrl: String) {
+        val settingsManager = PreferenceManager.getDefaultSharedPreferences(this)
+        // Forcefully start any delayed installations
+        if (ApkInstaller.delayedInstaller?.startInstallation() == true) return
+
+        showToast(R.string.download_started, Toast.LENGTH_LONG)
+
+        // Check if the setting hasn't been changed
+        if (settingsManager.getInt(
+                getString(R.string.apk_installer_key), -1
+            ) == -1
+        ) {
+            // Set to legacy installer if using MIUI
+            if (isMiUi()) {
+                settingsManager.edit {
+                    putInt(getString(R.string.apk_installer_key), 1)
+                }
+            }
+        }
+
+        val currentInstaller = settingsManager.getInt(
+            getString(R.string.apk_installer_key), 1
+        )
+
+        when (currentInstaller) {
+            // New method
+            0 -> {
+                val intent = PackageInstallerService.Companion.getIntent(
+                    this, downloadUrl
+                )
+                ContextCompat.startForegroundService(
+                    this, intent
+                )
+            }
+            // Legacy
+            1 -> {
+                ioSafe {
+                    if (!downloadUpdate(downloadUrl)) {
+                        runOnUiThread {
+                            showToast(
+                                R.string.download_failed, Toast.LENGTH_LONG
+                            )
+                        }
+                    }
+                }
+            }
+        }
+    }
+
+    suspend fun Activity.checkPopupNotice(): Boolean {
+        val settingsManager = PreferenceManager.getDefaultSharedPreferences(this)
+        val headers = mapOf(
+            "User-Agent" to "Mozilla/5.0 (Android; Mobile; JoyFlix)",
+            "Accept" to "application/json"
+        )
+        val notice = try {
+            val responseText = app.get(NOTICE_URL, headers = headers).text
+            tryParseJson<PopupNotice>(responseText)
+        } catch (e: Exception) {
+            Log.e(LOG_TAG, "Failed to fetch popup notice: ${e.message}")
+            null
+        } ?: return false
+
+        if (!notice.enabled) return false
+
+        fun parseVersion(versionStr: String?): Long {
+            if (versionStr.isNullOrBlank()) return 0L
+            val clean = versionStr.trim().removePrefix("v").removePrefix("V")
+            val match = Regex("""(\d+)(?:\.(\d+))?(?:\.(\d+))?""").find(clean) ?: return 0L
+            val major = match.groupValues.getOrNull(1)?.toLongOrNull() ?: 0L
+            val minor = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
+            val patch = match.groupValues.getOrNull(3)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
+            return major * 100_000_000L + minor * 10_000L + patch
+        }
+
+        val currentVersionName = packageName?.let {
+            try { packageManager.getPackageInfo(it, 0)?.versionName } catch (_: Exception) { null }
+        } ?: BuildConfig.VERSION_NAME
+
+        val currentVersionNum = parseVersion(currentVersionName)
+        val noticeVersionNum = parseVersion(notice.version)
+
+        // Don't show outdated notice if user is already on a strictly newer version
+        if (noticeVersionNum > 0 && currentVersionNum > 0 && currentVersionNum > noticeVersionNum) {
+            return false
+        }
+
+        // Check if user permanently skipped this notice version
+        val skippedVersion = settingsManager.getString("popup_notice_skipped_version", null)
+        if (!notice.version.isNullOrBlank() && skippedVersion == notice.version) {
+            return false
+        }
+
+        // Remind later cooldown
+        val lastNoticeTime = settingsManager.getLong("popup_notice_last_time", 0L)
+        val remindHours = if (notice.remindLaterHours > 0) notice.remindLaterHours else 24L
+        val cooldownMillis = remindHours * 3600 * 1000L
+        if (System.currentTimeMillis() - lastNoticeTime < cooldownMillis) {
+            return false
+        }
+
+        val title = notice.title?.takeIf { it.isNotBlank() } ?: getString(R.string.update)
+        val messageText = buildString {
+            if (!notice.message.isNullOrBlank()) {
+                append(notice.message)
+            }
+            if (notice.features.isNotEmpty()) {
+                if (isNotEmpty()) append("\n\n")
+                append(notice.features.joinToString("\n"))
+            }
+        }.trim()
+
+        val downloadUrl = notice.downloadUrl?.takeIf { it.isNotBlank() }
+        val positiveText = notice.buttonText?.takeIf { it.isNotBlank() } ?: getString(R.string.update)
+
+        runOnUiThread {
+            safe {
+                val builder = AlertDialog.Builder(this, R.style.AlertDialogCustom)
+                builder.setTitle(title)
+                builder.setMessage(messageText)
+
+                builder.setPositiveButton(positiveText) { _, _ ->
+                    if (!downloadUrl.isNullOrBlank()) {
+                        settingsManager.edit {
+                            putString("popup_notice_skipped_version", notice.version ?: "")
+                        }
+                        startUpdateDownload(downloadUrl)
+                    }
+                }
+
+                builder.setNegativeButton(R.string.cancel) { _, _ ->
+                    settingsManager.edit {
+                        putLong("popup_notice_last_time", System.currentTimeMillis())
+                    }
+                }
+
+                if (!notice.version.isNullOrBlank()) {
+                    builder.setNeutralButton(R.string.skip_update) { _, _ ->
+                        settingsManager.edit {
+                            putString("popup_notice_skipped_version", notice.version)
+                        }
+                    }
+                }
+
                 builder.show().setDefaultFocus()
             }
         }

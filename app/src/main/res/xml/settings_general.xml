@@ -77,10 +77,10 @@
         <Preference
             android:icon="@drawable/ic_github_logo"
             android:title="@string/github"
-            app:summary="https://github.com/jehadjoy15-stack/joyflix-cloud">
+            app:summary="https://github.com/jehadjoy69-droid/joyflix-apk">
             <intent
                 android:action="android.intent.action.VIEW"
-                android:data="https://github.com/jehadjoy15-stack/joyflix-cloud" />
+                android:data="https://github.com/jehadjoy69-droid/joyflix-apk" />
         </Preference>
 
         <Preference

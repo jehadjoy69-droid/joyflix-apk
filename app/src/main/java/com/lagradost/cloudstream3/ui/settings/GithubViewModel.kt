@@ -50,8 +50,8 @@ sealed class GithubAction {
     data class SkipUpdate(val file: GithubReleases.GithubFile) : GithubAction()
 }
 
-const val APK_USERNAME = "jehadjoy15-stack"
-const val APK_REPOSITORY = "joyflix-cloud"
+const val APK_USERNAME = "jehadjoy69-droid"
+const val APK_REPOSITORY = "joyflix-apk"
 const val APK_PRERELEASE = "pre-release"
 const val APK_CONTENT_TYPE = "application/vnd.android.package-archive"
 

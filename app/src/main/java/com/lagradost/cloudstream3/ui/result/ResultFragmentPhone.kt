@@ -1032,7 +1032,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                                     "$APP_STRING_SHARE:$nameBase64?$urlBase64",
                                     "UTF-8"
                                 )
-                                val redirectUrl = "${d.url}\nShared via JoyFlix: https://github.com/jehadjoy15-stack/joyflix-cloud"
+                                val redirectUrl = "${d.url}\nShared via JoyFlix: https://github.com/jehadjoy69-droid/joyflix-apk"
                                 i.type = "text/plain"
                                 i.putExtra(Intent.EXTRA_SUBJECT, d.title)
                                 i.putExtra(Intent.EXTRA_TEXT, redirectUrl)

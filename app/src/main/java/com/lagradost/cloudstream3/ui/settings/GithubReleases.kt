@@ -3,42 +3,44 @@ package com.lagradost.cloudstream3.ui.settings
 import androidx.compose.runtime.Immutable
 import com.fasterxml.jackson.annotation.JsonProperty
 import com.lagradost.cloudstream3.app
+import com.lagradost.cloudstream3.utils.AppUtils.parseJson
+import com.lagradost.cloudstream3.utils.AppUtils.tryParseJson
 import kotlinx.serialization.SerialName
 import kotlinx.serialization.Serializable
 import kotlin.jvm.Throws
 
 object GithubReleases {
+    private const val ANDROID_UPDATER_URL = "https://version.jehadjoy69.workers.dev/android"
+
     @Serializable
     private data class GithubAsset(
-        @JsonProperty("name") @SerialName("name") val name: String,
-        @JsonProperty("size") @SerialName("size") val size: Int, // Size in bytes
-        @JsonProperty("browser_download_url") @SerialName("browser_download_url") val browserDownloadUrl: String,
-        @JsonProperty("content_type") @SerialName("content_type") val contentType: String, // application/vnd.android.package-archive
+        @JsonProperty("name") @SerialName("name") val name: String = "",
+        @JsonProperty("size") @SerialName("size") val size: Int = 0, // Size in bytes
+        @JsonProperty("browser_download_url") @SerialName("browser_download_url") val browserDownloadUrl: String = "",
+        @JsonProperty("content_type") @SerialName("content_type") val contentType: String = "application/vnd.android.package-archive", // application/vnd.android.package-archive
         @JsonProperty("digest") @SerialName("digest") val digest: String? = null, // sha256:..., may be null
     )
 
     @Serializable
     private data class GithubRelease(
-        @JsonProperty("tag_name") @SerialName("tag_name") val tagName: String, // Version code
-        @JsonProperty("body") @SerialName("body") val body: String, // Description
-        @JsonProperty("assets") @SerialName("assets") val assets: List<GithubAsset>,
-        @JsonProperty("target_commitish") @SerialName("target_commitish") val targetCommitish: String, // Branch
-        @JsonProperty("prerelease") @SerialName("prerelease") val prerelease: Boolean,
-        @JsonProperty("node_id") @SerialName("node_id") val nodeId: String,
-        @JsonProperty("created_at") @SerialName("created_at") val createdAt: String, // YYYY-MM-DDTHH:MM:SSZ
+        @JsonProperty("tag_name") @SerialName("tag_name") val tagName: String = "", // Version code
+        @JsonProperty("name") @SerialName("name") val name: String? = null,
+        @JsonProperty("body") @SerialName("body") val body: String? = "", // Description
+        @JsonProperty("assets") @SerialName("assets") val assets: List<GithubAsset> = emptyList(),
+        @JsonProperty("target_commitish") @SerialName("target_commitish") val targetCommitish: String? = null, // Branch
+        @JsonProperty("prerelease") @SerialName("prerelease") val prerelease: Boolean = false,
+        @JsonProperty("node_id") @SerialName("node_id") val nodeId: String? = null,
+        @JsonProperty("created_at") @SerialName("created_at") val createdAt: String? = null, // YYYY-MM-DDTHH:MM:SSZ
     )
 
     @Serializable
     private data class GithubObject(
-        @JsonProperty("sha") @SerialName("sha") val sha: String, // SHA-256 hash
-        //@JsonProperty("type") @SerialName("type") val type: String,
-        ///@JsonProperty("url") @SerialName("url") val url: String,
+        @JsonProperty("sha") @SerialName("sha") val sha: String = "", // SHA-256 hash
     )
 
     @Serializable
     private data class GithubTag(
-        //@JsonProperty("node_id") @SerialName("node_id") val nodeId: String,
-        @JsonProperty("object") @SerialName("object") val githubObject: GithubObject,
+        @JsonProperty("object") @SerialName("object") val githubObject: GithubObject = GithubObject(),
     )
 
     /** GitHub file update package */
@@ -58,7 +60,10 @@ object GithubReleases {
         val nodeId: String,
     )
 
-    private val defaultHeaders = mapOf("Accept" to "application/vnd.github.v3+json")
+    private val defaultHeaders = mapOf(
+        "User-Agent" to "Mozilla/5.0 (Android; Mobile; JoyFlix)",
+        "Accept" to "application/json"
+    )
 
     @Throws
     suspend fun getShaFromTag(
@@ -66,10 +71,14 @@ object GithubReleases {
         repository: String,
         tag: String,
     ): String {
-        return app.get(
-            url = "https://api.github.com/repos/$userName/$repository/git/ref/tags/$tag",
-            headers = defaultHeaders
-        ).parsed<GithubTag>().githubObject.sha
+        return try {
+            val response = app.get(url = ANDROID_UPDATER_URL, headers = defaultHeaders)
+            val release = tryParseJson<GithubRelease>(response.text)
+                ?: parseJson<Array<GithubRelease>>(response.text).firstOrNull()
+            release?.tagName ?: "latest"
+        } catch (_: Exception) {
+            "latest"
+        }
     }
 
     @Throws
@@ -80,20 +89,9 @@ object GithubReleases {
         prereleaseTag: String,
         contentType: String,
     ): GithubFile? {
-        val latestReleaseUrl = if (prerelease) {
-            // Find the release object
-            // https://docs.github.com/en/rest/releases/releases?apiVersion=2026-03-10#get-a-release-by-tag-name
-            "https://api.github.com/repos/$userName/$repository/releases/tags/$prereleaseTag"
-        } else {
-            // Just get the latest release
-            // https://docs.github.com/en/rest/releases/releases?apiVersion=2026-03-10#get-the-latest-release
-            // The latest release is the most recent non-prerelease, non-draft release, sorted by the created_at attribute
-            "https://api.github.com/repos/$userName/$repository/releases/latest"
-        }
-
         val response = try {
             app.get(
-                url = latestReleaseUrl,
+                url = ANDROID_UPDATER_URL,
                 headers = defaultHeaders
             )
         } catch (_: Exception) {
@@ -105,10 +103,11 @@ object GithubReleases {
         }
 
         val latestRelease = try {
-            response.parsed<GithubRelease>()
+            tryParseJson<GithubRelease>(response.text)
+                ?: parseJson<Array<GithubRelease>>(response.text).firstOrNull()
         } catch (_: Exception) {
             return null
-        }
+        } ?: return null
 
         // Find the first correct APK asset, whether uploaded via web or GitHub action
         val foundAsset = latestRelease.assets.firstOrNull { asset ->
@@ -121,7 +120,7 @@ object GithubReleases {
             displayName = foundAsset.name.substringBeforeLast("."),
             changeLog = latestRelease.body ?: "",
             tagName = latestRelease.tagName,
-            nodeId = latestRelease.nodeId
+            nodeId = latestRelease.nodeId ?: latestRelease.tagName
         )
     }
 }
