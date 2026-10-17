@@ -1056,6 +1056,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
 
                 binding.resultBookmarkFab.isVisible = data is Resource.Success
                 resultFinishLoading.isVisible = data is Resource.Success
+                resultSourcesButton.isVisible = data is Resource.Success
 
                 resultLoading.isVisible = data is Resource.Loading
 
@@ -1425,6 +1426,10 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }
                 }
             }
+        }
+
+        resultBinding?.resultSourcesButton?.setOnClickListener {
+            viewModel.showSourcesDialog(activity)
         }
     }
 

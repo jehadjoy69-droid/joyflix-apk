@@ -73,6 +73,7 @@ import com.lagradost.cloudstream3.mvvm.observe
 import com.lagradost.cloudstream3.mvvm.observeNullable
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.ui.SyncWatchType
+import com.lagradost.cloudstream3.ui.result.StreamSourcesDialogFragment
 import com.lagradost.cloudstream3.subtitles.AbstractSubtitleEntities
 import com.lagradost.cloudstream3.subtitles.AbstractSubtitleEntities.SubtitleSearch
 import com.lagradost.cloudstream3.syncproviders.AccountManager.Companion.subtitleProviders
@@ -514,9 +515,25 @@ class GeneratorPlayer : FullScreenPlayer() {
     private fun loadLink(link: VideoLink?, sameEpisode: Boolean) {
         if (link == null) return
         isPlayerActive.set(true)
-        // manage UI
-        binding?.playerLoadingOverlay?.isVisible = false
-        stopOverlayLogoPulseAnimation(binding?.root?.findViewById(R.id.overlay_loading_logo))
+        showPlayerMetadata()
+        // Smoothly fade out loading overlay
+        binding?.playerLoadingOverlay?.let { overlay ->
+            if (overlay.isVisible) {
+                overlay.animate()
+                    .alpha(0f)
+                    .setDuration(350L)
+                    .withEndAction {
+                        overlay.isVisible = false
+                        overlay.alpha = 1f
+                        stopOverlayLogoPulseAnimation(binding?.root?.findViewById(R.id.overlay_loading_logo))
+                    }
+                    .start()
+            } else {
+                stopOverlayLogoPulseAnimation(binding?.root?.findViewById(R.id.overlay_loading_logo))
+            }
+        } ?: run {
+            stopOverlayLogoPulseAnimation(binding?.root?.findViewById(R.id.overlay_loading_logo))
+        }
         val isTorrent =
             link.first?.type == ExtractorLinkType.MAGNET || link.first?.type == ExtractorLinkType.TORRENT
 
@@ -1028,6 +1045,32 @@ class GeneratorPlayer : FullScreenPlayer() {
 
 
     override fun showMirrorsDialogue() {
+        val currentEp = (currentMeta as? ResultEpisode) ?: allMeta?.firstOrNull()
+        val currentResp = viewModel.state.generatorState?.response
+        val act = activity
+        val isTmdb = currentResp?.apiName == "JoyFlix Discover" ||
+            currentResp?.apiName == "TMDB" ||
+            currentResp?.syncData?.containsKey("tmdb") == true ||
+            currentEp?.data?.contains("themoviedb") == true ||
+            currentEp?.data?.contains("tmdbID") == true ||
+            currentResp?.url?.contains("themoviedb.org") == true
+
+        if (isTmdb && currentEp != null && act is androidx.fragment.app.FragmentActivity) {
+            val list = HashMap<String, String>(currentResp?.syncData ?: emptyMap())
+            val gen = (viewModel.generator as? RepoLinkGenerator)
+                ?: RepoLinkGenerator(listOf(currentEp), page = currentResp)
+            val index = viewModel.state.generatorState?.index ?: 0
+            StreamSourcesDialogFragment.show(
+                act,
+                currentEp,
+                currentResp,
+                gen,
+                index,
+                list
+            )
+            return
+        }
+
         try {
             currentSelectedSubtitles = player.getCurrentPreferredSubtitle()
             //println("CURRENT SELECTED :$currentSelectedSubtitles of $currentSubs")
@@ -1649,104 +1692,124 @@ class GeneratorPlayer : FullScreenPlayer() {
         populatePortraitEpisodes()
     }
 
-    private fun showPlayerMetadata() {
+    override fun showPlayerMetadata() {
         val overlay = playerBinding?.playerMetadataScrim ?: return
 
-        val titleView = overlay.findViewById<TextView>(R.id.player_movie_title)
-        val logoView = overlay.findViewById<ImageView>(R.id.player_movie_logo)
+        val titleView = overlay.findViewById<TextView>(R.id.player_movie_title) ?: return
+        val logoView = overlay.findViewById<ImageView>(R.id.player_movie_logo) ?: return
         val metaView = overlay.findViewById<TextView>(R.id.player_movie_meta)
         val descView = overlay.findViewById<TextView>(R.id.player_movie_overview)
 
-        val load = viewModel.state.generatorState?.response ?: return
+        val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
         val episode = currentMeta as? ResultEpisode
-        titleView.text = load.name
+        val mediaTitle = load?.name ?: (currentMeta as? ResultEpisode)?.name ?: getCurrentMediaTitle()
 
-        bindLogo(
-            url = load.logoUrl,
-            headers = load.posterHeaders,
-            titleView = titleView,
-            logoView = logoView
-        )
+        if (titleView.text.isNullOrBlank() && !mediaTitle.isNullOrBlank()) {
+            titleView.text = mediaTitle
+        }
+
+        val existingLogo = load?.logoUrl
+        if (!existingLogo.isNullOrBlank()) {
+            bindLogo(
+                url = existingLogo,
+                headers = load?.posterHeaders,
+                titleView = titleView,
+                logoView = logoView
+            )
+        }
 
         val meta = arrayOf(
-            load.tags?.takeIf { it.isNotEmpty() }?.take(6)?.joinToString(", "),
-            load.year?.toString(),
-            if (!load.type.isMovieType())
+            load?.tags?.takeIf { it.isNotEmpty() }?.take(6)?.joinToString(", "),
+            load?.year?.toString(),
+            if (load?.type?.isMovieType() != true)
                 context?.getShortSeasonText(
                     episode = episode?.episode,
                     season = episode?.season
                 )
             else null,
-            load.score?.let { "⭐ $it" }
+            load?.score?.let { "⭐ $it" }
         ).filterNotNull()
             .joinToString(" • ")
 
-        metaView.text = meta
-        metaView.isVisible = meta.isNotBlank()
+        if (meta.isNotBlank()) {
+            metaView?.text = meta
+            metaView?.isVisible = true
+        }
 
-
-        val description = load.plot
-
+        val description = episode?.description ?: load?.plot
         if (!description.isNullOrBlank()) {
-            descView.isVisible = true
-            descView.text = description.html()
+            descView?.isVisible = true
+            descView?.text = description.html()
         } else {
-            descView.isVisible = false
+            descView?.isVisible = false
         }
         updatePortraitLayoutMode()
 
         // Asynchronously fetch high quality clean Title Logo & extra info from TMDB
-        ioSafe {
-            val mediaInfo = TmdbMetadataHelper.fetchMediaInfo(load.name)
-            activity?.runOnUiThread {
-                if (!isAdded || isDetached) return@runOnUiThread
-                val bestLogo = mediaInfo?.logoUrl ?: load.logoUrl
-                if (!bestLogo.isNullOrBlank()) {
-                    load.logoUrl = bestLogo
-                    bindLogo(
-                        url = bestLogo,
-                        headers = load.posterHeaders,
-                        titleView = titleView,
-                        logoView = logoView
-                    )
-                    // Set small buffering logo in player center
-                    playerHostView?.playerBufferingLogo?.let { bufLogo ->
-                        bufLogo.loadImage(bestLogo)
-                        if (currentPlayerStatus == CSPlayerLoading.IsBuffering) {
-                            playerHostView?.playerBuffering?.isVisible = false
-                            bufLogo.isVisible = true
-                            playerHostView?.startLogoPulseAnimation()
+        if (mediaTitle != null) {
+            val tmdbId = load?.getTMDbId()?.toIntOrNull()
+                ?: (episode?.data?.let { d ->
+                    Regex("themoviedb\\.org/(?:movie|tv)/(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                })
+            val imdbId = load?.getImdbId()
+            val isMovie = load?.type?.isMovieType()
+
+            ioSafe {
+                val mediaInfo = TmdbMetadataHelper.fetchMediaInfo(
+                    rawTitle = mediaTitle,
+                    tmdbId = tmdbId,
+                    isMovie = isMovie,
+                    imdbId = imdbId
+                )
+                activity?.runOnUiThread {
+                    if (!isAdded || isDetached) return@runOnUiThread
+                    val bestLogo = mediaInfo?.logoUrl ?: load?.logoUrl
+                    if (!bestLogo.isNullOrBlank()) {
+                        load?.logoUrl = bestLogo
+                        bindLogo(
+                            url = bestLogo,
+                            headers = load?.posterHeaders,
+                            titleView = titleView,
+                            logoView = logoView
+                        )
+                        // Set small buffering logo in player center
+                        playerHostView?.playerBufferingLogo?.let { bufLogo ->
+                            bufLogo.loadImage(bestLogo)
+                            if (currentPlayerStatus == CSPlayerLoading.IsBuffering) {
+                                playerHostView?.playerBuffering?.isVisible = false
+                                bufLogo.isVisible = true
+                                playerHostView?.startLogoPulseAnimation()
+                            }
+                        }
+                    } else {
+                        // Fallback to title text if no logo exists
+                        if (logoView.drawable == null) {
+                            logoView.isVisible = false
+                            titleView.isVisible = true
                         }
                     }
-                } else {
-                    // No logo found from TMDB / AniList: fallback to normal loading circle
-                    playerHostView?.playerBufferingLogo?.setImageDrawable(null)
-                    playerHostView?.playerBufferingLogo?.isVisible = false
-                    if (currentPlayerStatus == CSPlayerLoading.IsBuffering) {
-                        playerHostView?.stopLogoPulseAnimation()
-                        playerHostView?.playerBuffering?.isVisible = true
+
+                    // If TMDB has a rating and load had no rating
+                    if (mediaInfo?.rating != null && load?.score == null) {
+                        val updatedMeta = listOfNotNull(
+                            load?.tags?.takeIf { it.isNotEmpty() }?.take(4)?.joinToString(", "),
+                            mediaInfo.year ?: load?.year?.toString(),
+                            if (load?.type?.isMovieType() != true) context?.getShortSeasonText(
+                                episode = episode?.episode,
+                                season = episode?.season
+                            ) else null,
+                            "⭐ ${mediaInfo.rating}"
+                        ).joinToString(" • ")
+                        metaView?.text = updatedMeta
+                        metaView?.isVisible = updatedMeta.isNotBlank()
                     }
-                }
 
-                // If TMDB has a rating and load had no rating
-                if (mediaInfo?.rating != null && load.score == null) {
-                    val updatedMeta = listOfNotNull(
-                        load.tags?.takeIf { it.isNotEmpty() }?.take(4)?.joinToString(", "),
-                        mediaInfo.year ?: load.year?.toString(),
-                        if (!load.type.isMovieType()) context?.getShortSeasonText(
-                            episode = episode?.episode,
-                            season = episode?.season
-                        ) else null,
-                        "⭐ ${mediaInfo.rating}"
-                    ).joinToString(" • ")
-                    metaView.text = updatedMeta
-                    metaView.isVisible = updatedMeta.isNotBlank()
-                }
-
-                // If synopsis was blank, use TMDB synopsis
-                if (descView.text.isNullOrBlank() && !mediaInfo?.overview.isNullOrBlank()) {
-                    descView.isVisible = true
-                    descView.text = mediaInfo?.overview?.html()
+                    // If synopsis was blank, use TMDB synopsis
+                    if (descView?.text.isNullOrBlank() && !mediaInfo?.overview.isNullOrBlank()) {
+                        descView?.isVisible = true
+                        descView?.text = mediaInfo?.overview?.html()
+                    }
                 }
             }
         }
@@ -2519,45 +2582,94 @@ class GeneratorPlayer : FullScreenPlayer() {
 
     private fun updateOverlayLoadingUI() {
         val b = binding ?: return
-        val logoView = b.root.findViewById<ImageView>(R.id.overlay_loading_logo) ?: return
+        val logoView = b.root.findViewById<ImageView>(R.id.overlay_loading_logo)
+        val titleView = b.root.findViewById<TextView>(R.id.overlay_loading_title)
+        val subtitleView = b.root.findViewById<TextView>(R.id.overlay_loading_subtitle)
+        val backdropView = b.root.findViewById<ImageView>(R.id.overlay_loading_backdrop)
+        val statusView = b.root.findViewById<TextView>(R.id.overlay_loading_status)
         val mainLoad = b.mainLoad
 
-        val load = viewModel.state.generatorState?.response
-        val bestLogo = load?.logoUrl
+        val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
+        val episode = currentMeta as? ResultEpisode
+        val mediaTitle = load?.name ?: episode?.name ?: getCurrentMediaTitle()
 
-        if (!bestLogo.isNullOrBlank()) {
+        // 1. Show Media Title & Episode / Season subtitle immediately
+        if (!mediaTitle.isNullOrBlank()) {
+            titleView?.text = mediaTitle
+            titleView?.isVisible = true
+        }
+
+        val epText = if (episode != null && load?.type?.isMovieType() != true) {
+            val seasonPart = context?.getShortSeasonText(episode.episode, episode.season)
+            val namePart = episode.name?.takeIf { it.isNotBlank() && it != mediaTitle }
+            listOfNotNull(seasonPart, namePart).joinToString(" • ")
+        } else {
+            listOfNotNull(load?.year?.toString(), load?.tags?.firstOrNull()).joinToString(" • ")
+        }
+
+        if (epText.isNotBlank()) {
+            subtitleView?.text = epText
+            subtitleView?.isVisible = true
+        }
+
+        // 2. Dimmed backdrop poster
+        val poster = load?.posterUrl
+        if (!poster.isNullOrBlank()) {
+            backdropView?.loadImage(poster)
+            backdropView?.isVisible = true
+        }
+
+        val bestLogo = load?.logoUrl
+        if (!bestLogo.isNullOrBlank() && logoView != null) {
             logoView.loadImage(bestLogo)
             mainLoad.isVisible = false
+            titleView?.isVisible = false
             logoView.isVisible = true
             startOverlayLogoPulseAnimation(logoView)
-        } else {
-            val mediaTitle = load?.name ?: getCurrentMediaTitle()
-            if (!mediaTitle.isNullOrBlank()) {
-                ioSafe {
-                    val mediaInfo = TmdbMetadataHelper.fetchMediaInfo(mediaTitle)
-                    activity?.runOnUiThread {
-                        if (!isAdded || isDetached) return@runOnUiThread
-                        val tmdbLogo = mediaInfo?.logoUrl
-                        if (!tmdbLogo.isNullOrBlank()) {
-                            load?.logoUrl = tmdbLogo
-                            logoView.loadImage(tmdbLogo)
-                            mainLoad.isVisible = false
-                            logoView.isVisible = true
-                            startOverlayLogoPulseAnimation(logoView)
-                        } else {
-                            stopOverlayLogoPulseAnimation(logoView)
-                            logoView.setImageDrawable(null)
-                            logoView.isVisible = false
-                            mainLoad.isVisible = true
-                        }
+        } else if (!mediaTitle.isNullOrBlank()) {
+            val tmdbId = load?.getTMDbId()?.toIntOrNull()
+                ?: (episode?.data?.let { d ->
+                    Regex("themoviedb\\.org/(?:movie|tv)/(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                })
+            val imdbId = load?.getImdbId()
+            val isMovie = load?.type?.isMovieType()
+
+            ioSafe {
+                val mediaInfo = TmdbMetadataHelper.fetchMediaInfo(
+                    rawTitle = mediaTitle,
+                    tmdbId = tmdbId,
+                    isMovie = isMovie,
+                    imdbId = imdbId
+                )
+                activity?.runOnUiThread {
+                    if (!isAdded || isDetached) return@runOnUiThread
+                    val tmdbLogo = mediaInfo?.logoUrl
+                    if (!tmdbLogo.isNullOrBlank() && logoView != null) {
+                        load?.logoUrl = tmdbLogo
+                        logoView.loadImage(tmdbLogo)
+                        mainLoad.isVisible = false
+                        titleView?.isVisible = false
+                        logoView.isVisible = true
+                        startOverlayLogoPulseAnimation(logoView)
+                    } else {
+                        stopOverlayLogoPulseAnimation(logoView)
+                        logoView?.setImageDrawable(null)
+                        logoView?.isVisible = false
+                        titleView?.isVisible = true
+                        mainLoad.isVisible = true
+                    }
+                    if (mediaInfo?.backdropUrl != null && backdropView?.drawable == null) {
+                        backdropView?.loadImage(mediaInfo.backdropUrl)
+                        backdropView?.isVisible = true
                     }
                 }
-            } else {
-                stopOverlayLogoPulseAnimation(logoView)
-                logoView.setImageDrawable(null)
-                logoView.isVisible = false
-                mainLoad.isVisible = true
             }
+        } else {
+            stopOverlayLogoPulseAnimation(logoView)
+            logoView?.setImageDrawable(null)
+            logoView?.isVisible = false
+            mainLoad.isVisible = true
         }
     }
 

@@ -477,6 +477,30 @@ object WatchTogetherManager {
 
             Log.i(TAG, "Joined room: $roomId with episodeIndex: $currentEpisodeIndex")
             onRoomLoaded(room)
+
+            // Direct auto-play immediately upon joining if host is already playing
+            if (!isHost && !room.mediaUrl.isNullOrBlank() && !room.apiName.isNullOrBlank()) {
+                val mediaUrl = room.mediaUrl
+                val apiName = room.apiName
+                val targetEp = room.playback.episodeIndex ?: room.episodeIndex ?: room.episodeId ?: 0
+                lastLoadedMediaUrl = mediaUrl
+                lastLoadedEpisodeIndex = targetEp
+                (com.lagradost.cloudstream3.CommonActivity.activity as? FragmentActivity)?.let { act ->
+                    act.runOnUiThread {
+                        showToast(act.getString(R.string.room_connected) + ": " + (room.title ?: "Playing"))
+                        pendingJoinRoomId = room.roomId
+                        act.loadResult(
+                            url = mediaUrl,
+                            apiName = apiName,
+                            name = room.title ?: "Watch Party",
+                            startAction = START_ACTION_LOAD_EP,
+                            startValue = room.episodeId ?: (room.episode ?: 0),
+                            episode = room.episode,
+                            season = room.season
+                        )
+                    }
+                }
+            }
         } catch (e: Throwable) {
             logError(e)
             onError(e.message ?: "Failed to join room")

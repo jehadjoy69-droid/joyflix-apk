@@ -50,6 +50,7 @@
                     android:layout_gravity="center_vertical"
                     android:ellipsize="end"
                     android:maxLines="2"
+                    android:fontFamily="@font/netflix_sans"
                     android:shadowColor="@android:color/black"
                     android:shadowDx="2"
                     android:shadowDy="2"
@@ -67,6 +68,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:maxLines="2"
+                android:fontFamily="@font/netflix_sans"
                 android:textColor="#B3FFFFFF"
                 android:textSize="14sp"
                 tools:text="Animation • Action • Adventure • 2025 • ⭐ 7.6" />
@@ -79,6 +81,7 @@
                 android:layout_marginTop="20dp"
                 android:lineSpacingExtra="8dp"
                 android:maxLines="5"
+                android:fontFamily="@font/netflix_sans"
                 android:shadowColor="@android:color/black"
                 android:shadowDx="2"
                 android:shadowDy="2"

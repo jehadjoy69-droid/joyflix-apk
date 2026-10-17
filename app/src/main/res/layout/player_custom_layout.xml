@@ -48,6 +48,7 @@
                     android:layout_width="match_parent"
                     android:layout_height="wrap_content"
                     android:layout_gravity="center_vertical"
+                    android:fontFamily="@font/netflix_sans"
                     android:textColor="@android:color/white"
                     android:textSize="36sp"
                     android:textStyle="bold"
@@ -63,6 +64,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
                 android:maxWidth="440dp"
+                android:fontFamily="@font/netflix_sans"
                 android:textColor="#B3FFFFFF"
                 android:textSize="14sp"
                 android:maxLines="1"
@@ -75,6 +77,7 @@
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="12dp"
+                android:fontFamily="@font/netflix_sans"
                 android:textColor="#D9FFFFFF"
                 android:textSize="14sp"
                 android:lineSpacingExtra="3dp"
@@ -1558,6 +1561,19 @@
                 android:textColor="@android:color/white"
                 android:textStyle="bold"
                 android:textSize="14sp" />
+
+            <com.google.android.material.button.MaterialButton
+                android:id="@+id/btn_horizontal_sources"
+                style="@style/MultiSelectButton"
+                android:layout_width="wrap_content"
+                android:layout_height="32dp"
+                android:layout_marginEnd="8dp"
+                android:text="@string/sources"
+                android:textSize="12sp"
+                app:icon="@drawable/ic_baseline_ondemand_video_24"
+                app:iconSize="16dp"
+                android:paddingStart="8dp"
+                android:paddingEnd="8dp" />
 
             <!-- Host Sync Indicator Badge -->
             <TextView

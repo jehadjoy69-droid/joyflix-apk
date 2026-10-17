@@ -311,6 +311,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 || selectWatchTogetherDialog?.isShowing == true
                 || isShowingEpisodeOverlay
 
+    open fun showPlayerMetadata() {}
+
     private fun scheduleMetadataVisibility() {
         val metadataScrim = playerBinding?.playerMetadataScrim ?: return
         val ctx = metadataScrim.context ?: return
@@ -325,6 +327,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         val token = ++metadataVisibilityToken
 
         if (isPaused) {
+            showPlayerMetadata()
             metadataScrim.postDelayed({
                 /** Make sure the user has not interacted with anything */
                 if (token != metadataVisibilityToken) return@postDelayed
@@ -336,24 +339,24 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 if (isDialogOpen()) return@postDelayed
 
                 metadataScrim.alpha = 0f
-                playerBinding?.playerMetadataOverlay?.translationY = -25.toPx.toFloat()
+                playerBinding?.playerMetadataOverlay?.translationY = -20.toPx.toFloat()
                 metadataScrim.isVisible = true
                 metadataScrim.animate()
                     .alpha(1f)
-                    .setDuration(400L)
+                    .setDuration(350L)
                     .setInterpolator(DecelerateInterpolator())
                     .start()
                 playerBinding?.playerMetadataOverlay?.animate()
                     ?.translationY(0f)
-                    ?.setDuration(400L)
+                    ?.setDuration(350L)
                     ?.setInterpolator(DecelerateInterpolator())
                     ?.start()
-            }, 1000L)
+            }, 300L)
         } else {
             if (metadataScrim.isVisible) {
                 metadataScrim.animate()
                     .alpha(0f)
-                    .setDuration(300L)
+                    .setDuration(250L)
                     .setInterpolator(AccelerateDecelerateInterpolator())
                     .withEndAction {
                         metadataScrim.alpha = 0f
@@ -361,8 +364,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                     }
                     .start()
                 playerBinding?.playerMetadataOverlay?.animate()
-                    ?.translationY(-25.toPx.toFloat())
-                    ?.setDuration(300L)
+                    ?.translationY(-20.toPx.toFloat())
+                    ?.setDuration(250L)
                     ?.setInterpolator(AccelerateDecelerateInterpolator())
                     ?.start()
             }
@@ -2343,6 +2346,9 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             }
             btnHorizontalEpisodesClose.setOnClickListener {
                 toggleEpisodesOverlay(show = false)
+            }
+            btnHorizontalSources.setOnClickListener {
+                showMirrorsDialogue()
             }
         }
         // init UI

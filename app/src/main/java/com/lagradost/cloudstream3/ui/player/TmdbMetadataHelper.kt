@@ -11,13 +11,15 @@ data class TmdbMediaInfo(
     val logoUrl: String?,
     val rating: String?,
     val year: String?,
-    val overview: String?
+    val overview: String?,
+    val backdropUrl: String? = null
 )
 
 object TmdbMetadataHelper {
     private const val TMDB_API_KEY = "e6333b32409e02a4a6eba6fb7ff866bb"
     private const val TMDB_SEARCH_URL = "https://api.themoviedb.org/3/search/multi"
     private const val TMDB_IMAGE_BASE = "https://image.tmdb.org/t/p/w500"
+    private const val TMDB_BACKDROP_BASE = "https://image.tmdb.org/t/p/w780"
 
     private val cache = ConcurrentHashMap<String, TmdbMediaInfo>()
 
@@ -25,6 +27,8 @@ object TmdbMetadataHelper {
         var t = rawTitle
         // Remove Season X, S01, Part X, Cour X, Dub, Sub, Uncensored, Movie etc.
         t = t.replace(Regex("(?i)\\b(season\\s*\\d+|s\\d+|part\\s*\\d+|cour\\s*\\d+|dub|sub|uncensored|bd|movie)\\b"), "")
+        // Remove quality and release tags: 1080p, 720p, 4k, x264, x265, hevc, web-dl, webrip, bluray
+        t = t.replace(Regex("(?i)\\b(1080p|720p|2160p|4k|x264|x265|hevc|web-dl|webrip|hdrip|bluray|hdtv|repack)\\b"), "")
         // Remove parenthesis/brackets content e.g. (2024), [Dub]
         t = t.replace(Regex("[\\(\\[\\{].*?[\\)\\]\\}]"), "")
         // Normalize whitespace
@@ -32,57 +36,123 @@ object TmdbMetadataHelper {
         return if (t.length >= 2) t else rawTitle.trim()
     }
 
-    suspend fun fetchMediaInfo(rawTitle: String): TmdbMediaInfo? = withContext(Dispatchers.IO) {
+    suspend fun fetchMediaInfo(
+        rawTitle: String,
+        tmdbId: Int? = null,
+        isMovie: Boolean? = null,
+        imdbId: String? = null
+    ): TmdbMediaInfo? = withContext(Dispatchers.IO) {
         val clean = cleanTitle(rawTitle)
-        if (clean.isBlank()) return@withContext null
+        val cacheKey = when {
+            tmdbId != null && tmdbId > 0 -> "tmdb_$tmdbId"
+            !imdbId.isNullOrBlank() -> "imdb_$imdbId"
+            else -> clean
+        }
+        if (cacheKey.isBlank()) return@withContext null
 
-        cache[clean]?.let { return@withContext it }
+        cache[cacheKey]?.let { return@withContext it }
 
         try {
-            val searchRes = app.get(
-                TMDB_SEARCH_URL,
-                params = mapOf(
-                    "api_key" to TMDB_API_KEY,
-                    "query" to clean,
-                    "include_adult" to "false",
-                    "language" to "en-US"
-                ),
-                cacheTime = 60 * 24
-            )
-
-            val searchJson = JSONObject(searchRes.text)
-            val results = searchJson.optJSONArray("results") ?: return@withContext null
-            if (results.length() == 0) return@withContext null
-
-            // Pick the first result that is movie or tv
-            var selected: JSONObject? = null
-            for (i in 0 until results.length()) {
-                val item = results.optJSONObject(i) ?: continue
-                val mType = item.optString("media_type")
-                if (mType == "movie" || mType == "tv") {
-                    selected = item
-                    break
-                }
+            var mediaType: String? = when (isMovie) {
+                true -> "movie"
+                false -> "tv"
+                null -> null
             }
-            if (selected == null) selected = results.optJSONObject(0) ?: return@withContext null
+            var resolvedId = if (tmdbId != null && tmdbId > 0) tmdbId else null
 
-            val mType = selected.optString("media_type", "movie")
-            val id = selected.optInt("id", -1)
-            if (id <= 0) return@withContext null
+            // 1. If IMDB ID provided and no TMDB ID, find via /find/{external_id}
+            if (resolvedId == null && !imdbId.isNullOrBlank()) {
+                try {
+                    val findUrl = "https://api.themoviedb.org/3/find/$imdbId"
+                    val findRes = app.get(
+                        findUrl,
+                        params = mapOf(
+                            "api_key" to TMDB_API_KEY,
+                            "external_source" to "imdb_id"
+                        ),
+                        cacheTime = 60 * 24
+                    )
+                    val findJson = JSONObject(findRes.text)
+                    val movieResults = findJson.optJSONArray("movie_results")
+                    val tvResults = findJson.optJSONArray("tv_results")
+                    if (movieResults != null && movieResults.length() > 0) {
+                        resolvedId = movieResults.getJSONObject(0).optInt("id", -1)
+                        mediaType = "movie"
+                    } else if (tvResults != null && tvResults.length() > 0) {
+                        resolvedId = tvResults.getJSONObject(0).optInt("id", -1)
+                        mediaType = "tv"
+                    }
+                } catch (_: Exception) {}
+            }
 
-            // Rating
-            val voteAvg = selected.optDouble("vote_average", 0.0)
+            // 2. If no TMDB ID yet, search TMDB by clean title
+            var voteAvg = 0.0
+            var yearStr: String? = null
+            var overview: String? = null
+
+            if (resolvedId == null || resolvedId <= 0) {
+                val searchRes = app.get(
+                    TMDB_SEARCH_URL,
+                    params = mapOf(
+                        "api_key" to TMDB_API_KEY,
+                        "query" to clean,
+                        "include_adult" to "false",
+                        "language" to "en-US"
+                    ),
+                    cacheTime = 60 * 24
+                )
+
+                val searchJson = JSONObject(searchRes.text)
+                val results = searchJson.optJSONArray("results") ?: return@withContext null
+                if (results.length() == 0) return@withContext null
+
+                var selected: JSONObject? = null
+                for (i in 0 until results.length()) {
+                    val item = results.optJSONObject(i) ?: continue
+                    val mType = item.optString("media_type")
+                    if (mediaType != null) {
+                        if (mType == mediaType) {
+                            selected = item
+                            break
+                        }
+                    } else if (mType == "movie" || mType == "tv") {
+                        selected = item
+                        break
+                    }
+                }
+                if (selected == null) selected = results.optJSONObject(0) ?: return@withContext null
+
+                mediaType = selected.optString("media_type", "movie")
+                resolvedId = selected.optInt("id", -1)
+                voteAvg = selected.optDouble("vote_average", 0.0)
+                val releaseDate = selected.optString("release_date").ifBlank { selected.optString("first_air_date") }
+                yearStr = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else null
+                overview = selected.optString("overview").takeIf { it.isNotBlank() }
+            }
+
+            if (resolvedId == null || resolvedId <= 0) return@withContext null
+            val mType = mediaType ?: "movie"
+
+            // If we didn't get details from search, fetch details for rating & year
+            if (overview == null || yearStr == null) {
+                try {
+                    val detailRes = app.get(
+                        "https://api.themoviedb.org/3/$mType/$resolvedId",
+                        params = mapOf("api_key" to TMDB_API_KEY, "language" to "en-US"),
+                        cacheTime = 60 * 24
+                    )
+                    val detailJson = JSONObject(detailRes.text)
+                    if (voteAvg <= 0.0) voteAvg = detailJson.optDouble("vote_average", 0.0)
+                    val releaseDate = detailJson.optString("release_date").ifBlank { detailJson.optString("first_air_date") }
+                    if (yearStr == null && releaseDate.length >= 4) yearStr = releaseDate.substring(0, 4)
+                    if (overview == null) overview = detailJson.optString("overview").takeIf { it.isNotBlank() }
+                } catch (_: Exception) {}
+            }
+
             val ratingStr = if (voteAvg > 0.0) String.format("%.1f", voteAvg) else null
 
-            // Year
-            val releaseDate = selected.optString("release_date").ifBlank { selected.optString("first_air_date") }
-            val yearStr = if (releaseDate.length >= 4) releaseDate.substring(0, 4) else null
-
-            // Overview
-            val overview = selected.optString("overview").takeIf { it.isNotBlank() }
-
-            // Fetch Logos
-            val imgUrl = "https://api.themoviedb.org/3/$mType/$id/images"
+            // 3. Fetch Logos & Backdrops
+            val imgUrl = "https://api.themoviedb.org/3/$mType/$resolvedId/images"
             val imgRes = app.get(
                 imgUrl,
                 params = mapOf(
@@ -111,15 +181,23 @@ object TmdbMetadataHelper {
                 }
             }
 
+            val backdrops = imgJson.optJSONArray("backdrops")
+            val backdropPath = if (backdrops != null && backdrops.length() > 0) {
+                backdrops.optJSONObject(0)?.optString("file_path")
+            } else null
+
             val logoFullUrl = if (!bestLogoPath.isNullOrBlank()) "$TMDB_IMAGE_BASE$bestLogoPath" else null
+            val backdropFullUrl = if (!backdropPath.isNullOrBlank()) "$TMDB_BACKDROP_BASE$backdropPath" else null
 
             val info = TmdbMediaInfo(
                 logoUrl = logoFullUrl,
                 rating = ratingStr,
                 year = yearStr,
-                overview = overview
+                overview = overview,
+                backdropUrl = backdropFullUrl
             )
-            cache[clean] = info
+            cache[cacheKey] = info
+            if (clean.isNotBlank()) cache[clean] = info
             info
         } catch (e: Exception) {
             logError(e)
