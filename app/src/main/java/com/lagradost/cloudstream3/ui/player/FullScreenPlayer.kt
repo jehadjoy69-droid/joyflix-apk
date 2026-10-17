@@ -370,6 +370,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
     }
 
     override fun onDestroyView() {
+        WatchTogetherManager.isPlayerOpen = false
         WatchTogetherManager.setOnRemoteSyncListener(null)
         WatchTogetherManager.setOnRoomClosedListener(null)
         WatchTogetherManager.setOnEpisodeChangedListener(null)
@@ -1308,6 +1309,29 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                     }
                 }
             }
+        } else if (WatchTogetherManager.isInRoom && WatchTogetherManager.isHost) {
+            val title = getCurrentMediaTitle() ?: playerBinding?.playerVideoTitle?.text?.toString()
+            val mediaUrl = getCurrentMediaUrl()
+            val apiName = getCurrentApiName()
+            val epId = getCurrentEpisodeId()
+            val epNum = getCurrentEpisodeNum()
+            val seasonNum = getCurrentSeasonNum()
+            val poster = getCurrentPoster()
+            val tvType = getCurrentTvType()
+            val epIndex = getCurrentEpisodeIndex()
+
+            WatchTogetherManager.broadcastSource(
+                streamUrl = player.getCurrentStreamUrl(),
+                mediaUrl = mediaUrl,
+                apiName = apiName,
+                episodeId = epId,
+                title = title,
+                episode = epNum,
+                season = seasonNum,
+                poster = poster,
+                tvType = tvType,
+                episodeIndex = epIndex
+            )
         } else if (WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost) {
             WatchTogetherManager.pendingJoinRoomId = null
             WatchTogetherManager.currentRoom?.playback?.let { state ->
@@ -2051,6 +2075,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
     }
 
     override fun onBindingCreated(binding: FragmentPlayerBinding, savedInstanceState: Bundle?) {
+        WatchTogetherManager.isPlayerOpen = true
         // Set up playerBinding before super initializes the player
         // (brightness overlay is now injected by PlayerView.initialize())
         playerBinding =
@@ -2318,9 +2343,6 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             }
             btnHorizontalEpisodesClose.setOnClickListener {
                 toggleEpisodesOverlay(show = false)
-            }
-            btnHorizontalSources.setOnClickListener {
-                showMirrorsDialogue()
             }
         }
         // init UI
@@ -2612,7 +2634,13 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 streamUrl = player.getCurrentStreamUrl(),
                 mediaUrl = getCurrentMediaUrl(),
                 apiName = getCurrentApiName(),
-                episodeId = getCurrentEpisodeId()
+                episodeId = getCurrentEpisodeId(),
+                title = getCurrentMediaTitle() ?: playerBinding?.playerVideoTitle?.text?.toString(),
+                episode = getCurrentEpisodeNum(),
+                season = getCurrentSeasonNum(),
+                poster = getCurrentPoster(),
+                tvType = getCurrentTvType(),
+                episodeIndex = getCurrentEpisodeIndex()
             )
         }
         // PlayerView already set isVerticalOrientation; skip rotation on TV (pillarbox instead).

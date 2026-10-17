@@ -9,6 +9,9 @@ import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.nicehttp.Requests.Companion.await
 import com.lagradost.nicehttp.cookies
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
+import kotlinx.coroutines.withTimeoutOrNull
 import okhttp3.Headers
 import okhttp3.Interceptor
 import okhttp3.Request
@@ -22,6 +25,7 @@ class CloudflareKiller : Interceptor {
         const val TAG = "CloudflareKiller"
         private val ERROR_CODES = listOf(403, 503)
         private val CLOUDFLARE_SERVERS = listOf("cloudflare-nginx", "cloudflare")
+        private val cloudflareMutex = Mutex()
         fun parseCookieMap(cookie: String): Map<String, String> {
             return cookie.split(";").associate {
                 val split = it.split("=")
@@ -109,26 +113,33 @@ class CloudflareKiller : Interceptor {
         ).await()
     }
 
-    private suspend fun bypassCloudflare(request: Request): Response? {
+    private suspend fun bypassCloudflare(request: Request): Response? = cloudflareMutex.withLock {
         val url = request.url.toString()
 
         // If no cookies then try to get them
-        // Remove this if statement if cookies expire
+        // While waiting for the mutex lock, another request might have already solved Cloudflare for this host!
         if (!trySolveWithSavedCookies(request)) {
-            Log.d(TAG, "Loading webview to solve cloudflare for ${request.url}")
-            WebViewResolver(
-                // Never exit based on url
-                Regex(".^"),
-                // Cloudflare needs default user agent
-                userAgent = null,
-                // Cannot use okhttp (i think intercepting cookies fails which causes the issues)
-                useOkhttp = false,
-                // Match every url for the requestCallBack
-                additionalUrls = listOf(Regex("."))
-            ).resolveUsingWebView(
-                url
-            ) {
-                trySolveWithSavedCookies(request)
+            Log.d(TAG, "Loading webview to solve cloudflare one-by-one for ${request.url}")
+            try {
+                withTimeoutOrNull(25_000L) {
+                    WebViewResolver(
+                        // Never exit based on url
+                        Regex(".^"),
+                        // Cloudflare needs default user agent
+                        userAgent = null,
+                        // Cannot use okhttp (i think intercepting cookies fails which causes the issues)
+                        useOkhttp = false,
+                        // Match every url for the requestCallBack
+                        additionalUrls = listOf(Regex(".")),
+                        timeout = 25_000L
+                    ).resolveUsingWebView(
+                        url
+                    ) {
+                        trySolveWithSavedCookies(request)
+                    }
+                }
+            } catch (e: Exception) {
+                Log.e(TAG, "Failed cloudflare bypass for ${request.url}: ${e.message}")
             }
         }
 

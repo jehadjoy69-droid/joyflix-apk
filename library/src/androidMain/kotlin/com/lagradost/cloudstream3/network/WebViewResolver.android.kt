@@ -19,6 +19,8 @@ import io.ktor.http.Url
 import io.ktor.http.decodeURLPart
 import kotlinx.coroutines.delay
 import kotlinx.coroutines.runBlocking
+import kotlinx.coroutines.sync.Mutex
+import kotlinx.coroutines.sync.withLock
 import okhttp3.Interceptor
 import okhttp3.Request
 import okhttp3.Response
@@ -48,6 +50,7 @@ actual class WebViewResolver actual constructor(
         actual var webViewUserAgent: String? = null
         actual val DEFAULT_TIMEOUT = 60_000L
         private const val TAG = "WebViewResolver"
+        private val webViewLock = Mutex()
 
         @JvmName("getWebViewUserAgent1")
         fun getWebViewUserAgent(): String? {
@@ -101,7 +104,7 @@ actual class WebViewResolver actual constructor(
     actual suspend fun resolveUsingWebView(
         request: Request,
         requestCallBack: (Request) -> Boolean
-    ): Pair<Request?, List<Request>> {
+    ): Pair<Request?, List<Request>> = webViewLock.withLock {
         val url = request.url.toString()
         val headers = request.headers
         Log.i(TAG, "Initial web-view request: $url")
@@ -268,14 +271,14 @@ actual class WebViewResolver actual constructor(
 
         // A bit sloppy, but couldn't find a better way
         while (loop < totalTime / delayTime && !shouldExit) {
-            if (fixedRequest != null) return fixedRequest to extraRequestList
+            if (fixedRequest != null) return@withLock fixedRequest to extraRequestList
             delay(delayTime)
             loop += 1
         }
 
         Log.i(TAG, "Web-view timeout after ${totalTime / 1000}s")
         destroyWebView()
-        return fixedRequest to extraRequestList
+        return@withLock fixedRequest to extraRequestList
     }
 }
 

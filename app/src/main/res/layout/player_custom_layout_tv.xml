@@ -584,7 +584,7 @@
                             android:visibility="visible"
                             android:format12Hour="hh:mm a"
                             android:format24Hour="HH:mm"
-                            android:fontFamily="@font/google_sans"
+                            android:fontFamily="@font/netflix_sans"
                             android:textStyle="bold" />
 
                     <LinearLayout

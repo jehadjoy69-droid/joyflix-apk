@@ -336,8 +336,7 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                 resultFavoriteButton to resultFavoriteText,
                 resultSubscribeButton to resultSubscribeText,
                 resultSearchButton to resultSearchText,
-                resultEpisodesShowButton to resultEpisodesShowText,
-                resultSourcesShowButton to resultSourcesShowText
+                resultEpisodesShowButton to resultEpisodesShowText
             ).forEach { (button, text) ->
 
                 button.setOnFocusChangeListener { view, hasFocus ->
@@ -367,9 +366,6 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                 // toggle, to make it more touch accessible just in case someone thinks that a
                 // tv layout is better but is using a touch device
                 toggleEpisodes(!episodeHolderTv.isVisible)
-            }
-            resultSourcesShowButton.setOnClickListener {
-                viewModel.showSourcesDialog(activity)
             }
 
             resultEpisodes.setLinearListLayout(
@@ -469,7 +465,6 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
 
             val aboveCast = listOf(
                 binding.resultEpisodesShow,
-                binding.resultSourcesShow,
                 binding.resultBookmark,
                 binding.resultFavorite,
                 binding.resultSubscribe,
@@ -706,7 +701,6 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                     }
 
                     resultPlayMovie.isVisible = !comingSoon && resultResumeSeries.isGone
-                    resultSourcesShow.isVisible = !comingSoon
                     if (comingSoon) {
                         resultBookmarkButton.requestFocus()
                     } else resultPlayMovieButton.requestFocus()
@@ -864,7 +858,6 @@ class ResultFragmentTv : BaseFragment<FragmentResultTvBinding>(
                             hasLoadedEpisodesOnce = true
                             resultPlaySeries.isVisible = resultResumeSeries.isGone && !comingSoon
                             resultEpisodesShow.isVisible = true && !comingSoon
-                            resultSourcesShow.isVisible = true && !comingSoon
                             resultPlaySeriesButton.requestFocus()
                         }
                     }

@@ -139,8 +139,10 @@ object WatchTogetherManager {
     private var onNewVoiceCallback: ((VoiceMessage) -> Unit)? = null
     private var lastSeenVoiceId: String? = null
     private val knownMemberIds = mutableSetOf<String>()
-
     val chatHistory = arrayListOf<ChatMessage>()
+    var lastLoadedMediaUrl: String? = null
+    var lastLoadedEpisodeIndex: Int? = null
+    var isPlayerOpen: Boolean = false
     private var onChatHistoryUpdatedCallback: ((List<ChatMessage>) -> Unit)? = null
     var isVoiceCallActive: Boolean = false
         private set
@@ -289,20 +291,39 @@ object WatchTogetherManager {
         }
     }
 
-    fun broadcastSource(streamUrl: String?, mediaUrl: String?, apiName: String?, episodeId: Int? = null) {
+    fun broadcastSource(
+        streamUrl: String?,
+        mediaUrl: String?,
+        apiName: String?,
+        episodeId: Int? = null,
+        title: String? = null,
+        episode: Int? = null,
+        season: Int? = null,
+        poster: String? = null,
+        tvType: String? = null,
+        episodeIndex: Int? = null
+    ) {
         val roomId = currentRoomId ?: return
         if (!isHost) return
 
         ioSafe {
             try {
                 val url = "${getBaseUrl()}/api/rooms/$roomId/source"
-                val body = mapOf(
+                val body = mutableMapOf<String, Any>(
                     "streamUrl" to (streamUrl ?: ""),
                     "mediaUrl" to (mediaUrl ?: ""),
-                    "apiName" to (apiName ?: ""),
-                    "episodeId" to episodeId
-                ).toJson().toRequestBody(JSON_MEDIA_TYPE)
-                app.post(url, requestBody = body)
+                    "apiName" to (apiName ?: "")
+                )
+                if (episodeId != null) body["episodeId"] = episodeId
+                if (title != null) body["title"] = title
+                if (episode != null) body["episode"] = episode
+                if (season != null) body["season"] = season
+                if (poster != null) body["poster"] = poster
+                if (tvType != null) body["tvType"] = tvType
+                if (episodeIndex != null) body["episodeIndex"] = episodeIndex
+
+                val req = body.toJson().toRequestBody(JSON_MEDIA_TYPE)
+                app.post(url, requestBody = req)
             } catch (e: Throwable) {
                 logError(e)
             }
@@ -467,6 +488,8 @@ object WatchTogetherManager {
         currentRoomId = null
         currentRoom = null
         currentEpisodeIndex = null
+        lastLoadedMediaUrl = null
+        lastLoadedEpisodeIndex = null
         isHost = false
         isCreatingWatchParty = false
         pendingHostNickname = null
@@ -536,6 +559,37 @@ object WatchTogetherManager {
                         if (roomObj != null) {
                             val room = AppUtils.parseJson<RoomData>(roomObj.toJson())
                             currentRoom = room
+
+                            // 0. Auto-play for guests in room when host starts or changes media
+                            if (!isHost) {
+                                val mediaUrl = room.mediaUrl
+                                val apiName = room.apiName
+                                if (!mediaUrl.isNullOrBlank() && !apiName.isNullOrBlank()) {
+                                    val targetEp = room.playback.episodeIndex ?: room.episodeIndex ?: room.episodeId ?: 0
+                                    val isNewMedia = (mediaUrl != lastLoadedMediaUrl) || (!isPlayerOpen && lastLoadedMediaUrl == null)
+
+                                    if (isNewMedia) {
+                                        lastLoadedMediaUrl = mediaUrl
+                                        lastLoadedEpisodeIndex = targetEp
+
+                                        (com.lagradost.cloudstream3.CommonActivity.activity as? FragmentActivity)?.let { act ->
+                                            act.runOnUiThread {
+                                                showToast(act.getString(R.string.room_connected) + ": " + (room.title ?: "Playing"))
+                                                pendingJoinRoomId = room.roomId
+                                                act.loadResult(
+                                                    url = mediaUrl,
+                                                    apiName = apiName,
+                                                    name = room.title ?: "Watch Party",
+                                                    startAction = START_ACTION_LOAD_EP,
+                                                    startValue = room.episodeId ?: (room.episode ?: 0),
+                                                    episode = room.episode,
+                                                    season = room.season
+                                                )
+                                            }
+                                        }
+                                    }
+                                }
+                            }
 
                             // 1. Check remote playback sync & episode change
                             val state = room.playback
@@ -714,6 +768,8 @@ object WatchTogetherManager {
                                 val url = room.mediaUrl
                                 val api = room.apiName
                                 if (!url.isNullOrBlank() && !api.isNullOrBlank()) {
+                                    lastLoadedMediaUrl = url
+                                    lastLoadedEpisodeIndex = room.playback.episodeIndex ?: room.episodeIndex ?: room.episodeId ?: 0
                                     pendingJoinRoomId = room.roomId
                                     activity.loadResult(
                                         url = url,
@@ -725,7 +781,7 @@ object WatchTogetherManager {
                                         season = room.season
                                     )
                                 } else {
-                                    showToast("Connected to room! Loading stream...")
+                                    showToast("Connected to room! Waiting for host to play...")
                                 }
                             }
                         },

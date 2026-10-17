@@ -16,6 +16,8 @@ import com.lagradost.cloudstream3.mvvm.Resource
 import com.lagradost.cloudstream3.mvvm.debugAssert
 import com.lagradost.cloudstream3.mvvm.debugWarning
 import com.lagradost.cloudstream3.mvvm.launchSafe
+import com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider
+import com.lagradost.cloudstream3.metaproviders.TmdbProvider
 import com.lagradost.cloudstream3.ui.APIRepository
 import com.lagradost.cloudstream3.ui.home.HomeViewModel
 import com.lagradost.cloudstream3.utils.Coroutines.ioSafe
@@ -221,13 +223,24 @@ class SearchViewModel : ViewModel() {
             lastQuery = query
 
             withContext(Dispatchers.IO) { // This interrupts UI otherwise
-                repos.filter { a ->
-                    !a.name.contains("IPTV", ignoreCase = true) &&
-                    !a.api.supportedTypes.all { it == TvType.Live } &&
-                    (ignoreSettings || (providersActive.isEmpty() || providersActive.contains(a.name))) && (!isQuickSearch || a.hasQuickSearch)
-                }.amap { a -> // Parallel
+                val targetRepos = repos.filter { a ->
+                    a.api is CrossTmdbProvider ||
+                    a.name == "JoyFlix Discover" ||
+                    a.api.name == "JoyFlix Discover" ||
+                    a.api is TmdbProvider ||
+                    a.name == "TMDB"
+                }.ifEmpty {
+                    repos.filter { a ->
+                        !a.name.contains("IPTV", ignoreCase = true) &&
+                        !a.api.supportedTypes.all { it == TvType.Live } &&
+                        (ignoreSettings || (providersActive.isEmpty() || providersActive.contains(a.name))) && (!isQuickSearch || a.hasQuickSearch)
+                    }
+                }
+
+                for (a in targetRepos) {
+                    if (currentSearchIndex != currentIndex) return@withContext
                     val search = if (isQuickSearch) a.quickSearch(query) else a.search(query, 1)
-                    if (currentSearchIndex != currentIndex) return@amap
+                    if (currentSearchIndex != currentIndex) return@withContext
                     if (search is Resource.Success) {
                         val searchValue = search.value
                         val nonLiveItems = searchValue.items.filter { it.type != TvType.Live }
@@ -239,6 +252,8 @@ class SearchViewModel : ViewModel() {
                     }
 
                     _currentSearch.postValue(expandableSearches)
+                    val list = bundleSearch(expandableSearches, query)
+                    _searchResponse.postValue(Resource.Success(list))
                 }
 
                 if (currentSearchIndex != currentIndex) return@withContext // this should prevent rewrite of existing data bug

@@ -1234,24 +1234,6 @@ class ResultViewModel2 : ViewModel() {
             ?: getMovie()
     }
 
-    fun showSourcesDialog(act: androidx.fragment.app.FragmentActivity?) {
-        if (act == null) return
-        val episode = getActiveEpisode() ?: return
-        val resp = currentResponse
-        val gen = generator ?: RepoLinkGenerator(listOf(episode), page = resp)
-        val list = HashMap<String, String>(resp?.syncData ?: emptyMap())
-        val rawIndex = gen.videos.indexOfFirst { it.id == episode.id }
-        val index = if (rawIndex < 0) 0 else rawIndex
-        StreamSourcesDialogFragment.show(
-            act,
-            episode,
-            resp,
-            gen,
-            index,
-            list
-        )
-    }
-
     private var currentLoadLinkJob: Job? = null
     private fun acquireSingleLink(
         result: ResultEpisode,
@@ -1260,27 +1242,6 @@ class ResultViewModel2 : ViewModel() {
         isCasting: Boolean = false,
         callback: (Pair<LinkLoadingResult, Int>) -> Unit
     ) {
-        val act = activity
-        val api = currentResponse?.apiName?.let { APIHolder.getApiFromNameNull(it) }
-        val isTmdb = currentResponse?.apiName == "JoyFlix Discover" ||
-            currentResponse?.apiName == "TMDB" ||
-            api is com.lagradost.cloudstream3.metaproviders.TmdbProvider
-
-        if (isTmdb && !isCasting && act is androidx.fragment.app.FragmentActivity) {
-            val list = HashMap<String, String>(currentResponse?.syncData ?: emptyMap())
-            val rawIndex = generator?.videos?.indexOfFirst { it.id == result.id } ?: -1
-            val index = if (rawIndex < 0) 0 else rawIndex
-
-            StreamSourcesDialogFragment.show(
-                act,
-                result,
-                currentResponse,
-                generator,
-                index,
-                list
-            )
-            return
-        }
 
         // TODO Add skip loading here
         loadLinks(result, isVisible = true, sourceTypes, isCasting = isCasting) { links ->
@@ -1484,30 +1445,10 @@ class ResultViewModel2 : ViewModel() {
                             click.copy(action = ACTION_CHROME_CAST_EPISODE)
                         )
                     } else {
-                        val api = currentResponse?.apiName?.let { APIHolder.getApiFromNameNull(it) }
-                        val isTmdb = currentResponse?.apiName == "JoyFlix Discover" ||
-                            currentResponse?.apiName == "TMDB" ||
-                            api is com.lagradost.cloudstream3.metaproviders.TmdbProvider
-
-                        if (isTmdb && ctx is androidx.fragment.app.FragmentActivity) {
-                            val list = HashMap<String, String>(currentResponse?.syncData ?: emptyMap())
-                            val rawIndex = generator?.videos?.indexOfFirst { it.id == click.data.id } ?: -1
-                            val index = if (rawIndex < 0) 0 else rawIndex
-
-                            StreamSourcesDialogFragment.show(
-                                ctx,
-                                click.data,
-                                currentResponse,
-                                generator,
-                                index,
-                                list
-                            )
-                        } else {
-                            val action = getPlayerAction(ctx)
-                            handleEpisodeClickEvent(
-                                click.copy(action = action)
-                            )
-                        }
+                        val action = getPlayerAction(ctx)
+                        handleEpisodeClickEvent(
+                            click.copy(action = action)
+                        )
                     }
                 }
             }
@@ -1634,22 +1575,7 @@ class ResultViewModel2 : ViewModel() {
                 val rawIndex = generator.videos.indexOfFirst { value -> value.id == click.data.id }
                 val index = if (rawIndex < 0) 0 else rawIndex
 
-                val act = activity
-                val api = currentResponse?.apiName?.let { APIHolder.getApiFromNameNull(it) }
-                val isTmdb = currentResponse?.apiName == "JoyFlix Discover" ||
-                    currentResponse?.apiName == "TMDB" ||
-                    api is com.lagradost.cloudstream3.metaproviders.TmdbProvider
-
-                if (isTmdb && act is androidx.fragment.app.FragmentActivity) {
-                    StreamSourcesDialogFragment.show(
-                        act,
-                        click.data,
-                        currentResponse,
-                        generator,
-                        index,
-                        list
-                    )
-                } else if (currentResponse?.type == TvType.CustomMedia) {
+                if (currentResponse?.type == TvType.CustomMedia) {
                     generator.generateLinks(
                         offset = index,
                         clearCache = true,
