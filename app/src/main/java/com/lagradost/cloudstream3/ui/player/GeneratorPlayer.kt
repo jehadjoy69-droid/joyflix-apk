@@ -187,22 +187,24 @@ class GeneratorPlayer : FullScreenPlayer() {
 
     private var currentSelectedLink: Pair<ExtractorLink?, ExtractorUri?>? = null
     private var currentSelectedSubtitles: SubtitleData? = null
-    private val currentMeta: Any? get() = viewModel.state.generatorState?.meta
-    private val nextMeta: Any? get() = viewModel.state.generatorState?.nextMeta
+    private val currentMeta: Any? get() = if (::viewModel.isInitialized) viewModel.state.generatorState?.meta else null
+    private val nextMeta: Any? get() = if (::viewModel.isInitialized) viewModel.state.generatorState?.nextMeta else null
 
     private var isPlayerActive: AtomicBoolean = AtomicBoolean(false)
     private var isNextEpisode: Boolean = false // this is used to reset the watch time
 
     private var preferredAutoSelectSubtitles: String? = null // null means do nothing, "" means none
     private val allMeta: List<ResultEpisode>?
-        get() = (viewModel.state.generatorState?.allMeta?.filterIsInstance<ResultEpisode>()
-            ?: (viewModel.generator as? VideoGenerator<*>)?.videos?.filterIsInstance<ResultEpisode>())
-            ?.map { episode ->
-                // Refresh all the episodes watch duration
-                getViewPos(episode.id)?.let { data ->
-                    episode.copy(position = data.position, duration = data.duration)
-                } ?: episode
-            }
+        get() = if (::viewModel.isInitialized) {
+            (viewModel.state.generatorState?.allMeta?.filterIsInstance<ResultEpisode>()
+                ?: (viewModel.generator as? VideoGenerator<*>)?.videos?.filterIsInstance<ResultEpisode>())
+                ?.map { episode ->
+                    // Refresh all the episodes watch duration
+                    getViewPos(episode.id)?.let { data ->
+                        episode.copy(position = data.position, duration = data.duration)
+                    } ?: episode
+                }
+        } else null
 
     private fun setSubtitles(subtitle: SubtitleData?, userInitiated: Boolean): Boolean {
         // If subtitle is changed and user initiated -> Save the language
@@ -1930,7 +1932,9 @@ class GeneratorPlayer : FullScreenPlayer() {
                     if (meta.tvType == TvType.Movie) {
                         if (maxEpisodeSet != 1) {
                             maxEpisodeSet = 1
-                            sync.setAndPublishStatus(SyncWatchType.COMPLETED, meta.headerName ?: meta.name)
+                            if (::sync.isInitialized) {
+                                sync.setAndPublishStatus(SyncWatchType.COMPLETED, meta.headerName ?: meta.name)
+                            }
                         }
                     } else if ((maxEpisodeSet ?: -1) < meta.episode) {
                         context?.let { ctx ->
@@ -1940,7 +1944,9 @@ class GeneratorPlayer : FullScreenPlayer() {
                                 )
                             ) {
                                 maxEpisodeSet = meta.episode
-                                sync.modifyMaxEpisode(meta.totalEpisodeIndex ?: meta.episode)
+                                if (::sync.isInitialized) {
+                                    sync.modifyMaxEpisode(meta.totalEpisodeIndex ?: meta.episode)
+                                }
                             }
                         }
                     }
@@ -2591,7 +2597,9 @@ class GeneratorPlayer : FullScreenPlayer() {
         binding?.overlayLoadingSkipButton?.isVisible = false
         binding?.playerLoadingOverlay?.isVisible = true
         updateOverlayLoadingUI()
-        viewModel.modifyState { setError(emptyList()) }
+        if (::viewModel.isInitialized) {
+            viewModel.modifyState { setError(emptyList()) }
+        }
         uiReset()
     }
 
@@ -2602,7 +2610,9 @@ class GeneratorPlayer : FullScreenPlayer() {
     }
 
     override fun onSaveInstanceState(outState: Bundle) {
-        outState.putInt("index", viewModel.episodeIndex)
+        if (::viewModel.isInitialized) {
+            outState.putInt("index", viewModel.episodeIndex)
+        }
         super.onSaveInstanceState(outState)
     }
 
