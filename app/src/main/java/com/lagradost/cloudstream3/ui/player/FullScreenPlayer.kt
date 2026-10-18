@@ -56,6 +56,8 @@ import com.lagradost.cloudstream3.LoadResponse
 import com.lagradost.cloudstream3.R
 import androidx.constraintlayout.widget.ConstraintSet
 import com.lagradost.cloudstream3.databinding.DialogWatchTogetherBinding
+import com.lagradost.cloudstream3.ui.watchtogether.WatchTogetherComposeDialog
+import com.lagradost.cloudstream3.ui.watchtogether.WatchTogetherMediaContext
 import com.lagradost.cloudstream3.databinding.FragmentPlayerBinding
 import com.lagradost.cloudstream3.databinding.ItemPlayerPortraitChatBinding
 import com.lagradost.cloudstream3.databinding.PlayerCustomLayoutBinding
@@ -1351,284 +1353,67 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
 
     private fun showWatchTogetherDialog() {
         val act = activity ?: return
-        val binding: DialogWatchTogetherBinding = DialogWatchTogetherBinding.inflate(
-            LayoutInflater.from(act)
-        )
-
-        val savedNick = WatchTogetherManager.getSavedNickname(act)
-        if (savedNick.isNotBlank()) {
-            binding.etNickname.setText(savedNick)
-        }
-
-        fun updateUI() {
-            if (WatchTogetherManager.isInRoom) {
-                binding.layoutNotInRoom.isVisible = false
-                binding.layoutInRoom.isVisible = true
-                val role = if (WatchTogetherManager.isHost) getString(R.string.host) else getString(R.string.member)
-                binding.tvRoomStatus.text = "● ${getString(R.string.room_connected)} • $role"
-                binding.tvCurrentRoomCode.text = WatchTogetherManager.currentRoomId ?: ""
-
-                // Members List
-                val members = WatchTogetherManager.currentRoom?.members ?: emptyList()
-                binding.tvMembersCount.text = "${members.size} online"
-                val membersFormatted = members.joinToString(", ") { m ->
-                    if (m.isHost) "👑 ${m.name} (Host)" else m.name
-                }
-                binding.tvMembersList.text = if (membersFormatted.isNotBlank()) membersFormatted else "👑 Host"
-
-                // Host button
-                binding.btnHostStartPlay.isVisible = WatchTogetherManager.isHost
-
-                if (WatchTogetherManager.IS_VOICE_ENABLED) {
-                    binding.layoutDialogVoice.isVisible = true
-                    setupUnifiedMicButton(binding.btnDialogMic)
-                    binding.layoutDialogVoice.setOnClickListener {
-                        binding.btnDialogMic.performClick()
-                    }
-
-                    val updateDialogVoiceUI: (Boolean) -> Unit = { isMicOn ->
-                        if (isMicOn) {
-                            binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#33FF3344"))
-                            binding.iconDialogVoice.setColorFilter(Color.parseColor("#FF3344"))
-                            binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_24)
-                            binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
-                            binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_status_live)
-                            binding.tvDialogVoiceSubtitle.setTextColor(Color.parseColor("#4CAF50"))
-                            binding.btnDialogMic.text = getString(R.string.mic_on)
-                            binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_24)
-                            binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#FF3344"))
-                            binding.btnDialogMic.setTextColor(Color.WHITE)
-                            binding.btnDialogMic.iconTint = ColorStateList.valueOf(Color.WHITE)
-                        } else {
-                            binding.iconDialogVoiceBadge.backgroundTintList = ColorStateList.valueOf(Color.parseColor("#26FFFFFF"))
-                            binding.iconDialogVoice.setColorFilter(Color.WHITE)
-                            binding.iconDialogVoice.setImageResource(R.drawable.ic_baseline_mic_off_24)
-                            binding.tvDialogVoiceTitle.text = getString(R.string.voice_chat)
-                            binding.tvDialogVoiceSubtitle.text = getString(R.string.voice_hold_to_talk)
-                            val grayColor = act.colorFromAttribute(R.attr.grayTextColor) ?: Color.GRAY
-                            binding.tvDialogVoiceSubtitle.setTextColor(grayColor)
-                            binding.btnDialogMic.text = getString(R.string.voice_turn_on)
-                            binding.btnDialogMic.setIconResource(R.drawable.ic_baseline_mic_off_24)
-                            binding.btnDialogMic.backgroundTintList = ColorStateList.valueOf(Color.WHITE)
-                            val darkColor = Color.parseColor("#1C1C1E")
-                            binding.btnDialogMic.setTextColor(darkColor)
-                            binding.btnDialogMic.iconTint = ColorStateList.valueOf(darkColor)
-                        }
-                    }
-                    currentDialogVoiceUpdater = updateDialogVoiceUI
-                    updateDialogVoiceUI(voiceHelper?.isLiveMicOn == true)
-                } else {
-                    binding.layoutDialogVoice.isGone = true
-                }
-            } else {
-                binding.layoutNotInRoom.isVisible = true
-                binding.layoutInRoom.isVisible = false
-            }
-            binding.watchTogetherLoading.isVisible = false
-            binding.tvWatchTogetherError.isVisible = false
-        }
-
-        updateUI()
-
-        WatchTogetherManager.setOnMembersUpdatedListener { members ->
-            act.runOnUiThread {
-                if (WatchTogetherManager.isInRoom) {
-                    binding.tvMembersCount.text = "${members.size} online"
-                    val membersFormatted = members.joinToString(", ") { m ->
-                        if (m.isHost) "👑 ${m.name} (Host)" else m.name
-                    }
-                    binding.tvMembersList.text = membersFormatted
-                }
-            }
-        }
-
-        binding.btnDialogClose.setOnClickListener {
-            selectWatchTogetherDialog?.dismissSafe(act)
-        }
-
-        binding.btnCreateRoom.setOnClickListener {
-            val nick = binding.etNickname.text?.toString()?.trim()
-            if (nick.isNullOrBlank()) {
-                binding.tvWatchTogetherError.text = getString(R.string.enter_nickname)
-                binding.tvWatchTogetherError.isVisible = true
-                binding.etNickname.requestFocus()
-                return@setOnClickListener
-            }
-            WatchTogetherManager.saveNickname(act, nick)
-
-            binding.watchTogetherLoading.isVisible = true
-            binding.tvWatchTogetherError.isVisible = false
-
-            // Extract all UI views and Player state on Main Thread!
-            val title = getCurrentMediaTitle() ?: playerBinding?.playerVideoTitle?.text?.toString()
-            val currentPos = player.getPosition() ?: 0L
-            val isPlaying = player.getIsPlaying()
-            val epIndex = getCurrentEpisodeIndex()
-            val mediaUrl = getCurrentMediaUrl()
-            val apiName = getCurrentApiName()
-            val epId = getCurrentEpisodeId()
-            val epNum = getCurrentEpisodeNum()
-            val seasonNum = getCurrentSeasonNum()
-            val poster = getCurrentPoster()
-            val tvType = getCurrentTvType()
-
-            ioSafe {
-                try {
-                    val result = WatchTogetherManager.createRoom(
-                        nickname = nick,
-                        title = title,
-                        streamUrl = player.getCurrentStreamUrl(),
-                        mediaUrl = mediaUrl,
-                        apiName = apiName,
-                        episodeId = epId,
-                        episode = epNum,
-                        season = seasonNum,
-                        poster = poster,
-                        tvType = tvType,
-                        currentPos = currentPos,
-                        isPlaying = isPlaying,
-                        episodeIndex = epIndex
-                    )
-                    act.runOnUiThread {
-                        result.onSuccess {
-                            showToast(R.string.room_created_success)
-                            updateUI()
-                        }.onFailure { err ->
-                            binding.tvWatchTogetherError.text = err.message ?: getString(R.string.room_not_found)
-                            binding.tvWatchTogetherError.isVisible = true
-                        }
-                    }
-                } finally {
-                    act.runOnUiThread {
-                        binding.watchTogetherLoading.isVisible = false
-                    }
-                }
-            }
-        }
-
-        binding.btnJoinRoom.setOnClickListener {
-            val nick = binding.etNickname.text?.toString()?.trim()
-            if (nick.isNullOrBlank()) {
-                binding.tvWatchTogetherError.text = getString(R.string.enter_nickname)
-                binding.tvWatchTogetherError.isVisible = true
-                binding.etNickname.requestFocus()
-                return@setOnClickListener
-            }
-            WatchTogetherManager.saveNickname(act, nick)
-
-            val code = binding.etRoomCode.text?.toString()?.trim()
-            if (code.isNullOrBlank()) {
-                binding.tvWatchTogetherError.text = getString(R.string.enter_room_code)
-                binding.tvWatchTogetherError.isVisible = true
-                return@setOnClickListener
-            }
-
-            binding.watchTogetherLoading.isVisible = true
-            binding.tvWatchTogetherError.isVisible = false
-            ioSafe {
-                try {
-                    WatchTogetherManager.joinRoom(
-                        inputCode = code,
-                        nickname = nick,
-                        onRoomLoaded = { room ->
-                            act.runOnUiThread {
-                                showToast(R.string.room_joined_success)
-                                selectWatchTogetherDialog?.dismissSafe(act)
-                                val roomMedia = room.mediaUrl
-                                val roomApi = room.apiName
-                                val currentMedia = getCurrentMediaUrl()
-                                if (!roomMedia.isNullOrBlank() && !roomApi.isNullOrBlank() && roomMedia != currentMedia) {
-                                    WatchTogetherManager.pendingJoinRoomId = room.roomId
-                                    act.loadResult(
-                                        url = roomMedia,
-                                        apiName = roomApi,
-                                        name = room.title ?: "Watch Party",
-                                        startAction = START_ACTION_LOAD_EP,
-                                        startValue = room.episodeId ?: (room.episode ?: 0),
-                                        episode = room.episode,
-                                        season = room.season
-                                    )
-                                    return@runOnUiThread
-                                }
-
-                                updateUI()
-                                val state = room.playback
-                                val targetEpisode = state.episodeIndex ?: room.episodeIndex
-                                val currentEpisode = getCurrentEpisodeIndex()
-                                if (targetEpisode != null && currentEpisode != null && currentEpisode != targetEpisode) {
-                                    loadEpisodeByIndex(targetEpisode)
-                                } else {
-                                    WatchTogetherManager.isApplyingRemoteSync = true
-                                    try {
-                                        val elapsed = if (state.updatedAt > 0) (System.currentTimeMillis() - state.updatedAt).coerceAtLeast(0L) else 0L
-                                        val targetPos = if (state.isPlaying) state.position + elapsed else state.position
-                                        player.seekTo(targetPos, PlayerEventSource.Sync)
-                                        if (state.isPlaying != player.getIsPlaying()) {
-                                            val cmd = if (state.isPlaying) CSPlayerEvent.Play else CSPlayerEvent.Pause
-                                            player.handleEvent(cmd, PlayerEventSource.Sync)
-                                        }
-                                    } finally {
-                                        playerHostView?.postDelayed({
-                                            WatchTogetherManager.isApplyingRemoteSync = false
-                                        }, 600L)
-                                    }
-                                }
-                            }
-                        },
-                        onError = { err ->
-                            act.runOnUiThread {
-                                binding.tvWatchTogetherError.text = err
-                                binding.tvWatchTogetherError.isVisible = true
-                            }
-                        }
-                    )
-                } finally {
-                    act.runOnUiThread {
-                        binding.watchTogetherLoading.isVisible = false
-                    }
-                }
-            }
-        }
-
-        binding.btnHostStartPlay.setOnClickListener {
-            player.handleEvent(CSPlayerEvent.Play, PlayerEventSource.Player)
-            val currentPos = player.getPosition() ?: 0L
-            WatchTogetherManager.broadcastPlayback(
-                isPlaying = true,
-                position = currentPos,
+        WatchTogetherComposeDialog.show(
+            fragmentManager = childFragmentManager,
+            context = WatchTogetherMediaContext(
+                title = getCurrentMediaTitle() ?: playerBinding?.playerVideoTitle?.text?.toString(),
+                streamUrl = player.getCurrentStreamUrl(),
+                mediaUrl = getCurrentMediaUrl(),
+                apiName = getCurrentApiName(),
+                episodeId = getCurrentEpisodeId(),
+                episode = getCurrentEpisodeNum(),
+                season = getCurrentSeasonNum(),
+                poster = getCurrentPoster(),
+                tvType = getCurrentTvType(),
+                currentPos = player.getPosition() ?: 0L,
+                isPlaying = player.getIsPlaying(),
                 episodeIndex = getCurrentEpisodeIndex()
-            )
-            selectWatchTogetherDialog?.dismissSafe(act)
-            showToast("Video started for everyone!")
-        }
+            ),
+            onSyncRoom = { room ->
+                act.runOnUiThread {
+                    showToast(R.string.room_joined_success)
+                    val roomMedia = room.mediaUrl
+                    val roomApi = room.apiName
+                    val currentMedia = getCurrentMediaUrl()
+                    if (!roomMedia.isNullOrBlank() && !roomApi.isNullOrBlank() && roomMedia != currentMedia) {
+                        WatchTogetherManager.pendingJoinRoomId = room.roomId
+                        act.loadResult(
+                            url = roomMedia,
+                            apiName = roomApi,
+                            name = room.title ?: "Watch Party",
+                            startAction = START_ACTION_LOAD_EP,
+                            startValue = room.episodeId ?: (room.episode ?: 0),
+                            episode = room.episode,
+                            season = room.season
+                        )
+                        return@runOnUiThread
+                    }
 
-        binding.btnCopyRoomCode.setOnClickListener {
-            val code = WatchTogetherManager.currentRoomId ?: return@setOnClickListener
-            clipboardHelper(txt(R.string.room_code), code)
-            showToast(R.string.room_code_copied)
-        }
-
-        binding.btnLeaveRoom.setOnClickListener {
-            voiceHelper?.stopLiveMic()
-            updateMicUI(false)
-            WatchTogetherManager.leaveRoom()
-            showToast(R.string.leave_room)
-            updateUI()
-            updatePortraitRoomTabs()
-            playerBinding?.playerFloatingMicContainer?.isGone = true
-        }
-
-        val dismiss = DialogInterface.OnDismissListener {
-            act.hideSystemUI()
-            selectWatchTogetherDialog = null
-            updatePortraitRoomTabs()
-        }
-
-        val builder = AlertDialog.Builder(act, R.style.AlertDialogCustom).setView(binding.root)
-        builder.setOnDismissListener(dismiss)
-        val dialog = builder.create()
-        selectWatchTogetherDialog = dialog
-        dialog.show()
+                    updatePortraitRoomTabs()
+                    val state = room.playback
+                    val targetEpisode = state.episodeIndex ?: room.episodeIndex
+                    val currentEpisode = getCurrentEpisodeIndex()
+                    if (targetEpisode != null && currentEpisode != null && currentEpisode != targetEpisode) {
+                        loadEpisodeByIndex(targetEpisode)
+                    } else {
+                        WatchTogetherManager.isApplyingRemoteSync = true
+                        try {
+                            val elapsed = if (state.updatedAt > 0) (System.currentTimeMillis() - state.updatedAt).coerceAtLeast(0L) else 0L
+                            val targetPos = if (state.isPlaying) state.position + elapsed else state.position
+                            player.seekTo(targetPos, PlayerEventSource.Sync)
+                            if (state.isPlaying != player.getIsPlaying()) {
+                                val cmd = if (state.isPlaying) CSPlayerEvent.Play else CSPlayerEvent.Pause
+                                player.handleEvent(cmd, PlayerEventSource.Sync)
+                            }
+                        } finally {
+                            playerHostView?.postDelayed({
+                                WatchTogetherManager.isApplyingRemoteSync = false
+                            }, 600L)
+                        }
+                    }
+                }
+            }
+        )
     }
 
     private fun onClickChange() {

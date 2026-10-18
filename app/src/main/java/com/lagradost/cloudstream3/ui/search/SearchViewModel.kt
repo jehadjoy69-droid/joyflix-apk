@@ -127,7 +127,14 @@ class SearchViewModel : ViewModel() {
     suspend fun expandAndReturn(name: String): HomeViewModel.ExpandableHomepageList? {
         if (lock.contains(name)) return null
         val query = lastQuery ?: return null
-        val repo = repos.find { it.name == name } ?: return null
+        val repo = repos.find {
+            it.name == name && (
+                it.api is CrossTmdbProvider ||
+                it.api is TmdbProvider ||
+                it.name == "JoyFlix Discover" ||
+                it.name == "TMDB"
+            )
+        } ?: return null
 
         lock += name
 
@@ -225,16 +232,21 @@ class SearchViewModel : ViewModel() {
             withContext(Dispatchers.IO) { // This interrupts UI otherwise
                 val targetRepos = repos.filter { a ->
                     a.api is CrossTmdbProvider ||
+                    a.api is TmdbProvider ||
                     a.name == "JoyFlix Discover" ||
                     a.api.name == "JoyFlix Discover" ||
-                    a.api is TmdbProvider ||
-                    a.name == "TMDB"
+                    a.name == "TMDB" ||
+                    a.api.name == "TMDB"
                 }.ifEmpty {
-                    repos.filter { a ->
-                        !a.name.contains("IPTV", ignoreCase = true) &&
-                        !a.api.supportedTypes.all { it == TvType.Live } &&
-                        (ignoreSettings || (providersActive.isEmpty() || providersActive.contains(a.name))) && (!isQuickSearch || a.hasQuickSearch)
-                    }
+                    val tmdbApi = apis.withLock {
+                        apis.firstOrNull {
+                            it is CrossTmdbProvider ||
+                            it is TmdbProvider ||
+                            it.name == "JoyFlix Discover" ||
+                            it.name == "TMDB"
+                        }
+                    } ?: CrossTmdbProvider()
+                    listOf(APIRepository(tmdbApi))
                 }
 
                 for (a in targetRepos) {

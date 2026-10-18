@@ -607,6 +607,24 @@ class StreamSourcesDialogFragment : DialogFragment() {
         // 2. Dismiss dialog
         dismissAllowingStateLoss()
 
+        // If in Watch Together and isHost: broadcast this source immediately!
+        if (com.lagradost.cloudstream3.utils.WatchTogetherManager.isInRoom &&
+            com.lagradost.cloudstream3.utils.WatchTogetherManager.isHost
+        ) {
+            com.lagradost.cloudstream3.utils.WatchTogetherManager.broadcastSource(
+                streamUrl = selectedLink.url,
+                mediaUrl = currentResponse?.url ?: episode.data,
+                apiName = currentResponse?.apiName ?: episode.apiName,
+                episodeId = episode.id,
+                title = currentResponse?.name ?: episode.name,
+                episode = episode.episode,
+                season = episode.season,
+                poster = currentResponse?.posterUrl ?: episode.poster,
+                tvType = currentResponse?.type?.name ?: episode.tvType?.name,
+                episodeIndex = currentIndex
+            )
+        }
+
         // 3. If player is already active, switch link directly in-player!
         val currentActivity = act
         if (currentActivity is androidx.fragment.app.FragmentActivity) {

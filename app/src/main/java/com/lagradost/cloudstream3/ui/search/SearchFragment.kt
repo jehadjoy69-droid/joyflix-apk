@@ -184,6 +184,7 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
     private fun reloadRepos(success: Boolean = false) = main {
         searchViewModel.reloadRepos()
         binding?.tvtypesChipsScroll?.root?.visibility = View.GONE
+        binding?.searchFilter?.isVisible = false
     }
 
     override fun fixLayout(view: View) {
@@ -219,6 +220,7 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             searchAutofitResults.adapter = adapter
             searchLoadingBar.alpha = 0f
             tvtypesChipsScroll.root.visibility = View.GONE
+            searchFilter.isVisible = false
         }
 
         binding.voiceSearch.setOnClickListener { searchView ->

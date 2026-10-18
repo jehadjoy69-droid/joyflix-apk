@@ -1056,6 +1056,10 @@ class GeneratorPlayer : FullScreenPlayer() {
             currentResp?.url?.contains("themoviedb.org") == true
 
         if (isTmdb && currentEp != null && act is androidx.fragment.app.FragmentActivity) {
+            if (WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost) {
+                showToast("Only host can change sources in Watch Together")
+                return
+            }
             val list = HashMap<String, String>(currentResp?.syncData ?: emptyMap())
             val gen = (viewModel.generator as? RepoLinkGenerator)
                 ?: RepoLinkGenerator(listOf(currentEp), page = currentResp)
@@ -1678,7 +1682,16 @@ class GeneratorPlayer : FullScreenPlayer() {
 
         val links = viewModel.state.sortLinks(currentQualityProfile)
 
-        val firstAvailableLink = links.firstOrNull { it.shouldUseLink }?.link
+        val hostStreamUrl = if (WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost) {
+            WatchTogetherManager.currentRoom?.streamUrl
+        } else null
+
+        val firstAvailableLink = if (!hostStreamUrl.isNullOrBlank()) {
+            links.firstOrNull { it.shouldUseLink && it.link.first?.url == hostStreamUrl }?.link
+                ?: links.firstOrNull { it.shouldUseLink }?.link
+        } else {
+            links.firstOrNull { it.shouldUseLink }?.link
+        }
         if (firstAvailableLink == null) {
             noLinksFound()
             return
@@ -2440,41 +2453,29 @@ class GeneratorPlayer : FullScreenPlayer() {
                     })
                 } else {
                     playerEpisodeOverlay.isGone = true
-                    // 2. Crunchyroll-style Horizontal Episode Slider Bar (Phone)
-                    rvHorizontalEpisodes.setRecycledViewPool(EpisodeAdapter.sharedPool)
-                    rvHorizontalEpisodes.adapter = EpisodeAdapter(
-                        false,
-                        onEpisodeSelected,
-                        downloadHandler
-                    )
-                    rvHorizontalEpisodes.setLinearListLayout(
-                        isHorizontal = true,
-                        nextUp = FOCUS_SELF,
-                        nextDown = FOCUS_SELF,
-                        nextRight = FOCUS_SELF,
-                    )
-                    (rvHorizontalEpisodes.adapter as? EpisodeAdapter)?.submitList(episodes)
+                    playerHorizontalEpisodesContainer.isGone = true
+                    val currentId = (currentMeta as? ResultEpisode)?.id
+                    val currentIndex = viewModel.state.generatorState?.index
 
-                    // 3. Update Host Sync Badge
-                    if (WatchTogetherManager.isInRoom) {
-                        tvHostSyncBadge.isVisible = true
-                        if (WatchTogetherManager.isHost) {
-                            tvHostSyncBadge.text = "HOST (Tap ep to sync room)"
-                            tvHostSyncBadge.setTextColor(0xFF10B981.toInt())
-                        } else {
-                            tvHostSyncBadge.text = "GUEST (Synced with Host)"
-                            tvHostSyncBadge.setTextColor(0xFF3B82F6.toInt())
+                    PlayerEpisodesComposeDialogFragment.show(
+                        fragmentManager = childFragmentManager,
+                        episodes = episodes,
+                        currentEpisodeId = currentId,
+                        currentEpisodeIndex = currentIndex,
+                        onEpisodeSelected = { selectedEp, selectedIdx ->
+                            isNextEpisode = false
+                            releasePlayer()
+                            viewModel.loadThisEpisode(selectedIdx)
+                            if (WatchTogetherManager.isInRoom && WatchTogetherManager.isHost) {
+                                WatchTogetherManager.changeEpisode(selectedIdx)
+                                WatchTogetherManager.broadcastPlayback(
+                                    isPlaying = true,
+                                    position = 0L,
+                                    episodeIndex = selectedIdx
+                                )
+                            }
                         }
-                    } else {
-                        tvHostSyncBadge.isVisible = false
-                    }
-
-                    // Scroll to current episode
-                    viewModel.state.generatorState?.index?.let { index ->
-                        rvHorizontalEpisodes.scrollToPosition(index)
-                    }
-
-                    populatePortraitEpisodes()
+                    )
                 }
             }
         } catch (e: Exception) {

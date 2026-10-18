@@ -133,6 +133,7 @@ import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.utils.UiText
 import com.lagradost.cloudstream3.utils.VIDEO_WATCH_STATE
+import com.lagradost.cloudstream3.utils.WatchTogetherManager
 import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement.sanitizeFilename
 import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
 import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
@@ -1260,6 +1261,23 @@ class ResultViewModel2 : ViewModel() {
         isCasting: Boolean = false,
         callback: (Pair<LinkLoadingResult, Int>) -> Unit
     ) {
+        val isWatchTogetherGuest = WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost
+        val act = activity
+        if (!isWatchTogetherGuest && !isCasting && sourceTypes == LOADTYPE_INAPP && act is androidx.fragment.app.FragmentActivity) {
+            val list = HashMap<String, String>(currentResponse?.syncData ?: emptyMap())
+            val gen = generator ?: RepoLinkGenerator(listOf(result), page = currentResponse)
+            val rawIndex = gen.videos.indexOfFirst { it.id == result.id }
+            val index = if (rawIndex < 0) 0 else rawIndex
+            StreamSourcesDialogFragment.show(
+                act,
+                result,
+                currentResponse,
+                gen,
+                index,
+                list
+            )
+            return
+        }
 
         // TODO Add skip loading here
         loadLinks(result, isVisible = true, sourceTypes, isCasting = isCasting) { links ->
@@ -1463,10 +1481,26 @@ class ResultViewModel2 : ViewModel() {
                             click.copy(action = ACTION_CHROME_CAST_EPISODE)
                         )
                     } else {
-                        val action = getPlayerAction(ctx)
-                        handleEpisodeClickEvent(
-                            click.copy(action = action)
-                        )
+                        val isWatchTogetherGuest = WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost
+                        if (!isWatchTogetherGuest && ctx is androidx.fragment.app.FragmentActivity) {
+                            val list = HashMap<String, String>(currentResponse?.syncData ?: emptyMap())
+                            val gen = generator ?: RepoLinkGenerator(listOf(click.data), page = currentResponse)
+                            val rawIndex = gen.videos.indexOfFirst { it.id == click.data.id }
+                            val index = if (rawIndex < 0) 0 else rawIndex
+                            StreamSourcesDialogFragment.show(
+                                ctx,
+                                click.data,
+                                currentResponse,
+                                gen,
+                                index,
+                                list
+                            )
+                        } else {
+                            val action = getPlayerAction(ctx)
+                            handleEpisodeClickEvent(
+                                click.copy(action = action)
+                            )
+                        }
                     }
                 }
             }
@@ -1587,14 +1621,24 @@ class ResultViewModel2 : ViewModel() {
 
             ACTION_PLAY_EPISODE_IN_PLAYER -> {
                 val list = HashMap<String, String>(currentResponse?.syncData ?: emptyMap())
-                val generator = generator ?: return
+                val gen = generator ?: RepoLinkGenerator(listOf(click.data), page = currentResponse)
 
-                // I know kinda shit to iterate all, but it is 100% sure to work
-                val rawIndex = generator.videos.indexOfFirst { value -> value.id == click.data.id }
+                val rawIndex = gen.videos.indexOfFirst { value -> value.id == click.data.id }
                 val index = if (rawIndex < 0) 0 else rawIndex
 
-                if (currentResponse?.type == TvType.CustomMedia) {
-                    generator.generateLinks(
+                val act = activity
+                val isWatchTogetherGuest = WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost
+                if (!isWatchTogetherGuest && act is androidx.fragment.app.FragmentActivity) {
+                    StreamSourcesDialogFragment.show(
+                        act,
+                        click.data,
+                        currentResponse,
+                        gen,
+                        index,
+                        list
+                    )
+                } else if (currentResponse?.type == TvType.CustomMedia) {
+                    gen.generateLinks(
                         offset = index,
                         clearCache = true,
                         isCasting = false,
@@ -1602,10 +1646,10 @@ class ResultViewModel2 : ViewModel() {
                         callback = {},
                         subtitleCallback = {})
                 } else {
-                    activity?.navigate(
+                    act?.navigate(
                         R.id.global_to_navigation_player,
                         GeneratorPlayer.newInstance(
-                            generator, index, list
+                            gen, index, list
                         )
                     )
                 }
