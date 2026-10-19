@@ -123,22 +123,25 @@ class SearchViewModel : ViewModel() {
 
     private val lock: MutableSet<String> = mutableSetOf()
 
+    private fun getTmdbRepo(): APIRepository {
+        val tmdbApi = apis.withLock {
+            apis.firstOrNull { it is CrossTmdbProvider }
+        } ?: com.lagradost.cloudstream3.APIHolder.allProviders.withLock {
+            com.lagradost.cloudstream3.APIHolder.allProviders.firstOrNull { it is CrossTmdbProvider }
+        } ?: CrossTmdbProvider()
+        return APIRepository(tmdbApi)
+    }
+
     // ExpandableHomepageList because the home adapter is reused in the search fragment
     suspend fun expandAndReturn(name: String): HomeViewModel.ExpandableHomepageList? {
         if (lock.contains(name)) return null
         val query = lastQuery ?: return null
-        val repo = repos.find {
-            it.name == name && (
-                it.api is CrossTmdbProvider ||
-                it.api is TmdbProvider ||
-                it.name == "JoyFlix Discover" ||
-                it.name == "TMDB"
-            )
-        } ?: return null
+        val repo = getTmdbRepo()
+        val providerKey = repo.name
 
         lock += name
 
-        expandableSearches[name]?.let { current ->
+        expandableSearches[providerKey]?.let { current ->
             debugAssert({ !current.hasNext }) {
                 "Expand called when not needed"
             }
@@ -147,19 +150,21 @@ class SearchViewModel : ViewModel() {
             val next = repo.search(query, nextPage)
             if (next is Resource.Success) {
                 val nextValue = next.value
-                expandableSearches[name]?.apply {
+                val tmdbOnlyItems = nextValue.items.filter { item ->
+                    item.type != TvType.Live && (
+                        item.url.contains("themoviedb.org") ||
+                        item.apiName == "JoyFlix Discover" ||
+                        item.apiName == "TMDB"
+                    )
+                }
+                expandableSearches[providerKey]?.apply {
                     this.hasNext = nextValue.hasNext
                     this.currentPage = nextPage
 
-                    debugWarning({ nextValue.items.any { outer -> this.list.any { it.url == outer.url } } }) {
-                        "Expanded search contained an item that was previously already in the list.\nQuery = $query, ${nextValue.items} = ${this.list}"
-                    }
-
-                    // just to be sure we are not adding the same shit for some reason
-                    // Avoids weird behavior in the recyclerview by recreating the list
-                    this.list = rankSearchResults((this.list + nextValue.items).distinctBy { it.url }, query)
+                    // Avoid duplicate items and rank by query relevance
+                    this.list = rankSearchResults((this.list + tmdbOnlyItems).distinctBy { it.url }, query)
                 } ?: debugWarning {
-                    "Expanded an item not in search load named $name, current list is ${expandableSearches.keys}"
+                    "Expanded an item not in search load named $providerKey, current list is ${expandableSearches.keys}"
                 }
             } else {
                 current.hasNext = false
@@ -171,9 +176,9 @@ class SearchViewModel : ViewModel() {
 
         lock -= name
 
-        val item = expandableSearches[name] ?: return null
+        val item = expandableSearches[providerKey] ?: return null
         return HomeViewModel.ExpandableHomepageList(
-            HomePageList(name, item.list),
+            HomePageList(providerKey, item.list),
             item.currentPage,
             item.hasNext
         )
@@ -188,11 +193,17 @@ class SearchViewModel : ViewModel() {
             allItems.addAll(it.list)
         }
 
-        if (query.isNullOrBlank()) {
-            return ExpandableSearchList(allItems.distinctBy { it.url }, 1, false)
+        val filteredItems = allItems.filter { item ->
+            item.url.contains("themoviedb.org") ||
+            item.apiName == "JoyFlix Discover" ||
+            item.apiName == "TMDB"
         }
 
-        val rankedList = rankSearchResults(allItems, query)
+        if (query.isNullOrBlank()) {
+            return ExpandableSearchList(filteredItems.distinctBy { it.url }, 1, false)
+        }
+
+        val rankedList = rankSearchResults(filteredItems, query)
         return ExpandableSearchList(rankedList, 1, false)
     }
 
@@ -230,45 +241,29 @@ class SearchViewModel : ViewModel() {
             lastQuery = query
 
             withContext(Dispatchers.IO) { // This interrupts UI otherwise
-                val targetRepos = repos.filter { a ->
-                    a.api is CrossTmdbProvider ||
-                    a.api is TmdbProvider ||
-                    a.name == "JoyFlix Discover" ||
-                    a.api.name == "JoyFlix Discover" ||
-                    a.name == "TMDB" ||
-                    a.api.name == "TMDB"
-                }.ifEmpty {
-                    val tmdbApi = apis.withLock {
-                        apis.firstOrNull {
-                            it is CrossTmdbProvider ||
-                            it is TmdbProvider ||
-                            it.name == "JoyFlix Discover" ||
-                            it.name == "TMDB"
-                        }
-                    } ?: CrossTmdbProvider()
-                    listOf(APIRepository(tmdbApi))
-                }
+                val targetRepo = getTmdbRepo()
+                val providerKey = targetRepo.name
 
-                for (a in targetRepos) {
-                    if (currentSearchIndex != currentIndex) return@withContext
-                    val search = if (isQuickSearch) a.quickSearch(query) else a.search(query, 1)
-                    if (currentSearchIndex != currentIndex) return@withContext
-                    if (search is Resource.Success) {
-                        val searchValue = search.value
-                        val nonLiveItems = searchValue.items.filter { it.type != TvType.Live }
-                        val sortedItems = rankSearchResults(nonLiveItems, query)
-                        if (sortedItems.isNotEmpty()) {
-                            expandableSearches[a.name] =
-                                ExpandableSearchList(sortedItems, 1, searchValue.hasNext)
-                        }
+                if (currentSearchIndex != currentIndex) return@withContext
+                val search = if (isQuickSearch) targetRepo.quickSearch(query) else targetRepo.search(query, 1)
+                if (currentSearchIndex != currentIndex) return@withContext
+                if (search is Resource.Success) {
+                    val searchValue = search.value
+                    val tmdbOnlyItems = searchValue.items.filter { item ->
+                        item.type != TvType.Live && (
+                            item.url.contains("themoviedb.org") ||
+                            item.apiName == "JoyFlix Discover" ||
+                            item.apiName == "TMDB"
+                        )
                     }
-
-                    _currentSearch.postValue(expandableSearches)
-                    val list = bundleSearch(expandableSearches, query)
-                    _searchResponse.postValue(Resource.Success(list))
+                    val sortedItems = rankSearchResults(tmdbOnlyItems, query)
+                    if (sortedItems.isNotEmpty()) {
+                        expandableSearches[providerKey] =
+                            ExpandableSearchList(sortedItems, 1, searchValue.hasNext)
+                    }
                 }
 
-                if (currentSearchIndex != currentIndex) return@withContext // this should prevent rewrite of existing data bug
+                if (currentSearchIndex != currentIndex) return@withContext
 
                 _currentSearch.postValue(expandableSearches)
                 val list = bundleSearch(expandableSearches, query)

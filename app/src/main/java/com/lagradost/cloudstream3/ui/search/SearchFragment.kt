@@ -67,6 +67,7 @@ import com.lagradost.cloudstream3.utils.AppContextUtils.filterProviderByPreferre
 import com.lagradost.cloudstream3.utils.AppContextUtils.filterSearchResultByFilmQuality
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiProviderLangSettings
 import com.lagradost.cloudstream3.utils.AppContextUtils.getApiSettings
+import com.lagradost.cloudstream3.utils.AppContextUtils.isRecyclerScrollable
 import com.lagradost.cloudstream3.utils.AppContextUtils.ownHide
 import com.lagradost.cloudstream3.utils.AppContextUtils.ownShow
 import com.lagradost.cloudstream3.utils.AppContextUtils.setDefaultFocus
@@ -218,9 +219,43 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
             searchAutofitResults.setHasFixedSize(true)
             searchAutofitResults.setRecycledViewPool(SearchAdapter.sharedPool)
             searchAutofitResults.adapter = adapter
+            searchAutofitResults.addOnScrollListener(object : androidx.recyclerview.widget.RecyclerView.OnScrollListener() {
+                var expandCount = 0
+
+                override fun onScrollStateChanged(recyclerView: androidx.recyclerview.widget.RecyclerView, newState: Int) {
+                    super.onScrollStateChanged(recyclerView, newState)
+
+                    val searchAdapter = recyclerView.adapter as? SearchAdapter ?: return
+                    val count = searchAdapter.itemCount
+                    val currentHasNext = searchAdapter.hasNext
+
+                    if (!recyclerView.isRecyclerScrollable() && currentHasNext && expandCount != count) {
+                        expandCount = count
+                        ioSafe {
+                            searchViewModel.expandAndReturn("JoyFlix Discover")
+                        }
+                    }
+                }
+
+                override fun onScrolled(recyclerView: androidx.recyclerview.widget.RecyclerView, dx: Int, dy: Int) {
+                    super.onScrolled(recyclerView, dx, dy)
+                    if (dy > 0) {
+                        val searchAdapter = recyclerView.adapter as? SearchAdapter ?: return
+                        val count = searchAdapter.itemCount
+                        val currentHasNext = searchAdapter.hasNext
+                        if (!recyclerView.canScrollVertically(1) && currentHasNext && expandCount != count) {
+                            expandCount = count
+                            ioSafe {
+                                searchViewModel.expandAndReturn("JoyFlix Discover")
+                            }
+                        }
+                    }
+                }
+            })
             searchLoadingBar.alpha = 0f
             tvtypesChipsScroll.root.visibility = View.GONE
             searchFilter.isVisible = false
+            searchMasterRecycler.isVisible = false
         }
 
         binding.voiceSearch.setOnClickListener { searchView ->
@@ -385,8 +420,8 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
         selectedSearchTypes = DataStoreHelper.searchPreferenceTags.toMutableList()
 
         if (!isLayout(PHONE)) {
-            binding.searchFilter.isFocusable = true
-            binding.searchFilter.isFocusableInTouchMode = true
+            binding.searchFilter.isFocusable = false
+            binding.searchFilter.isFocusableInTouchMode = false
         }
 
         // Hide suggestions when search view loses focus (phone only)
@@ -426,8 +461,8 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 }
                 binding.apply {
                     searchHistoryRecycler.isVisible = showHistory
-                    searchMasterRecycler.isVisible = !showHistory && isAdvancedSearch
-                    searchAutofitResults.isVisible = !showHistory && !isAdvancedSearch
+                    searchMasterRecycler.isVisible = false
+                    searchAutofitResults.isVisible = !showHistory
                     // Hide suggestions when showing history or showing search results
                     searchSuggestionsRecycler.isVisible = !showHistory && isSearchSuggestionsEnabled
                 }
@@ -441,10 +476,9 @@ class SearchFragment : BaseFragment<FragmentSearchBinding>(
                 is Resource.Success -> {
                     it.value.let { data ->
                         val list = data.list
-                        if (list.isNotEmpty()) {
-                            (binding.searchAutofitResults.adapter as? SearchAdapter)?.submitList(
-                                list
-                            )
+                        (binding.searchAutofitResults.adapter as? SearchAdapter)?.apply {
+                            this.hasNext = data.hasNext
+                            this.submitList(list)
                         }
                     }
                     searchExitIcon?.alpha = 1f
