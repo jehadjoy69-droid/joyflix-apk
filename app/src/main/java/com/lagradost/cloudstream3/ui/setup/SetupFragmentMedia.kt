@@ -31,7 +31,7 @@ class SetupFragmentMedia : BaseFragment<FragmentSetupMediaBinding>(
             val arrayAdapter =
                 ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
 
-            val sortedTypes = enumValues<TvType>().sorted()
+            val sortedTypes = enumValues<TvType>().filter { it != TvType.NSFW }.sorted()
 
             arrayAdapter.addAll(sortedTypes.map { it.name })
             binding.apply {
@@ -41,9 +41,7 @@ class SetupFragmentMedia : BaseFragment<FragmentSetupMediaBinding>(
 
                     val stored = settingsManager.getStringSet(prefKey, null)
                     sortedTypes.forEachIndexed { index, type ->
-                        // All media types except NSFW are checked by default
-                        val isChecked = stored?.contains(type.ordinal.toString())
-                            ?: (type != TvType.NSFW)
+                        val isChecked = stored?.contains(type.ordinal.toString()) ?: true
                         it.setItemChecked(index, isChecked)
                     }
 

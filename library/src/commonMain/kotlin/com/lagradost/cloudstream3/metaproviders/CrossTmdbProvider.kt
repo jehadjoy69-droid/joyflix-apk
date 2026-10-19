@@ -187,7 +187,9 @@ class CrossTmdbProvider : TmdbProvider() {
                 it.name != "None" &&
                 it.name != "Random" &&
                 !it.name.contains("IPTV", ignoreCase = true) &&
-                !it.supportedTypes.all { type -> type == TvType.Live }
+                !it.supportedTypes.all { type -> type == TvType.Live } &&
+                !it.supportedTypes.contains(TvType.NSFW) &&
+                !com.lagradost.cloudstream3.NsfwHelper.isAdult(it.name, it.mainUrl, it.supportedTypes)
             }
         }
 

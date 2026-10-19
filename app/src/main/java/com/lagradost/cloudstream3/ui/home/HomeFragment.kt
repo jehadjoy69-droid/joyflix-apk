@@ -293,6 +293,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             others: Chip?,
         ): List<Pair<Chip?, List<TvType>>> {
             // This list should be same order as home screen to aid navigation
+            nsfw?.isVisible = false
             return listOf(
                 Pair(movies, listOf(TvType.Movie)),
                 Pair(tvs, listOf(TvType.TvSeries)),
@@ -302,7 +303,6 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 Pair(docs, listOf(TvType.Documentary)),
                 Pair(livestream, listOf(TvType.Live)),
                 Pair(torrent, listOf(TvType.Torrent)),
-                Pair(nsfw, listOf(TvType.NSFW)),
                 Pair(others, listOf(TvType.Others)),
             )
         }
@@ -316,7 +316,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             header.homeSelectAsian,
             header.homeSelectLivestreams,
             header.homeSelectTorrents,
-            header.homeSelectNsfw,
+            header.homeSelectNsfw.apply { isVisible = false },
             header.homeSelectOthers
         )
 
@@ -488,13 +488,11 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     arrayAdapter.clear()
                     val sortedApis = validAPIs
                         .filter {
-                            val isPinned = pinnedphashset.contains(it.name)
-
-                            // Hide pinned NSFW when NSFW not selected. NSFW is distracting when not chosen.
-                            if (isPinned && !preSelectedTypes.contains(TvType.NSFW)) {
-                                if (it.supportedTypes.all { type -> type == TvType.NSFW }) return@filter false
+                            if (it.supportedTypes.contains(TvType.NSFW) ||
+                                com.lagradost.cloudstream3.NsfwHelper.isAdult(it.name, it.mainUrl, it.supportedTypes)) {
+                                return@filter false
                             }
-
+                            val isPinned = pinnedphashset.contains(it.name)
                             it.hasMainPage && (isPinned || it.supportedTypes.any(
                                 preSelectedTypes::contains
                             ))

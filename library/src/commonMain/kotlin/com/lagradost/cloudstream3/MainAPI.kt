@@ -106,6 +106,49 @@ val json = Json {
 val mapper = JsonMapper.builder().addModule(kotlinModule())
     .configure(DeserializationFeature.FAIL_ON_UNKNOWN_PROPERTIES, false).build()!!
 
+@InternalAPI
+object NsfwHelper {
+    private val ADULT_KEYWORDS = listOf(
+        "nsfw", "18+", "porn", "hentai", "hanime", "rule34", "nhentai",
+        "missav", "jable", "spankbang", "xvideos", "pornhub", "xnxx",
+        "redtube", "brazzers", "stripchat", "chaturbate", "youporn",
+        "eporner", "tnaflix", "tube8", "heavy-r", "hqporner", "beeg",
+        "cam4", "camsoda", "xhamster", "fakku", "luscious", "e-hentai",
+        "exhentai", "doujindesu", "doujinshi", "komik18", "manhwa18",
+        "komikdewasa", "komikhentai", "manhwahentai", "porncomix",
+        "javhd", "javdb", "javlibrary", "javbus", "javmost", "supjav",
+        "hpjav", "javguru", "av01", "7mmtv", "thisav", "netflav",
+        "fanza", "sukebei", "manyvids", "onlyfans", "fansly", "sexvid",
+        "xxxbunker", "cumlouder", "bravoteens", "czechav", "eromanga",
+        "tsumino", "hitomi", "pururin", "multporn"
+    )
+
+    private val ADULT_WORD_REGEX = Regex("(?i)(^|[^a-zA-Z0-9])(nsfw|18\\+|adult|hentai|jav|xxx|porn|erotic)([^a-zA-Z0-9]|$)")
+
+    fun isAdult(
+        name: String?,
+        url: String? = null,
+        supportedTypes: Set<TvType>? = null,
+        tvTypes: List<String>? = null
+    ): Boolean {
+        if (supportedTypes?.contains(TvType.NSFW) == true) return true
+        if (tvTypes?.any {
+            it.equals(TvType.NSFW.name, ignoreCase = true) ||
+            it.contains("NSFW", ignoreCase = true) ||
+            it.contains("Adult", ignoreCase = true) ||
+            it.contains("18+", ignoreCase = true)
+        } == true) return true
+
+        val checkStrings = listOfNotNull(name, url)
+        for (str in checkStrings) {
+            val lower = str.lowercase()
+            if (ADULT_KEYWORDS.any { lower.contains(it) }) return true
+            if (ADULT_WORD_REGEX.containsMatchIn(str)) return true
+        }
+        return false
+    }
+}
+
 object APIHolder {
     val unixTimeMS: Long
         get() = Clock.System.now().toEpochMilliseconds()
@@ -132,6 +175,9 @@ object APIHolder {
     var apiMap: Map<String, Int>? = null
 
     fun addPluginMapping(plugin: MainAPI) {
+        if (NsfwHelper.isAdult(plugin.name, plugin.mainUrl, plugin.supportedTypes)) {
+            return
+        }
         apis.withLock {
             apis = apis + plugin
         }

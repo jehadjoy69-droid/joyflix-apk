@@ -41,6 +41,7 @@ import com.lagradost.cloudstream3.actions.VideoClickActionHolder
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.mvvm.debugPrint
 import com.lagradost.cloudstream3.mvvm.logError
+import com.lagradost.cloudstream3.NsfwHelper
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.plugins.RepositoryManager.ONLINE_PLUGINS_FOLDER
 import com.lagradost.cloudstream3.plugins.RepositoryManager.PREBUILT_REPOSITORIES
@@ -251,23 +252,25 @@ object PluginManager {
         assertNonRecursiveCallstack()
         isSyncingPlugins = true
 
-        fun isUnwanted(name: String, internalName: String): Boolean {
+        fun isUnwanted(name: String, internalName: String, url: String? = null, tvTypes: List<String>? = null): Boolean {
             val n = name.lowercase()
             val i = internalName.lowercase()
             return n.contains("watchparty") || n.contains("watch party") || n.contains("syncplay") ||
                     i.contains("watchparty") || i.contains("watch party") || i.contains("syncplay") ||
                     n.contains("netflix") || n.contains("netmirror") ||
-                    i.contains("netflix") || i.contains("netmirror")
+                    i.contains("netflix") || i.contains("netmirror") ||
+                    NsfwHelper.isAdult(name, url, null, tvTypes) ||
+                    NsfwHelper.isAdult(internalName, url, null, tvTypes)
         }
 
         try {
-            // Clean up any previously installed unwanted/conflicting plugins (like third-party WatchParty)
+            // Clean up any previously installed unwanted/conflicting/NSFW plugins
             try {
                 val currentInstalled = getPluginsOnline()
                 for (p in currentInstalled) {
                     val pName = File(p.filePath).nameWithoutExtension
-                    if (isUnwanted(p.internalName, p.internalName) || isUnwanted(pName, pName)) {
-                        Log.i(TAG, "Purging unwanted/conflicting plugin: ${p.filePath}")
+                    if (isUnwanted(p.internalName, p.internalName, p.url) || isUnwanted(pName, pName, p.url)) {
+                        Log.i(TAG, "Purging unwanted/NSFW plugin: ${p.filePath}")
                         unloadPlugin(p.filePath)
                         File(p.filePath).delete()
                         deletePluginData(p)
@@ -302,7 +305,7 @@ object PluginManager {
             }.flatten().distinctBy { it.plugin.url }
 
             val onlinePlugins = rawOnlinePlugins.filter {
-                !isUnwanted(it.plugin.name, it.plugin.internalName)
+                !isUnwanted(it.plugin.name, it.plugin.internalName, it.plugin.url, it.plugin.tvTypes)
             }
 
             Log.i(TAG, "JoyFlix sync: Found ${onlinePlugins.size} online plugins in repo")
@@ -530,17 +533,11 @@ object PluginManager {
                 return@mapNotNull null
             }
 
-            //Omit non-NSFW if mode is set to NSFW only
-            if (mode == AutoDownloadMode.NsfwOnly) {
-                if (!tvtypes.contains(TvType.NSFW.name)) {
-                    return@mapNotNull null
-                }
-            }
-            //Omit NSFW, if disabled
-            if (!settingsForProvider.enableAdult) {
-                if (tvtypes.contains(TvType.NSFW.name)) {
-                    return@mapNotNull null
-                }
+            // Omit NSFW / Adult plugins completely
+            if (tvtypes.contains(TvType.NSFW.name) ||
+                NsfwHelper.isAdult(sitePlugin.name, sitePlugin.url, null, tvtypes) ||
+                NsfwHelper.isAdult(sitePlugin.internalName, sitePlugin.url, null, tvtypes)) {
+                return@mapNotNull null
             }
 
             //Omit lang not selected on language setting
@@ -782,7 +779,10 @@ object PluginManager {
                 lowerInternal.contains("watchparty") || lowerInternal.contains("watch party") || lowerInternal.contains("syncplay") ||
                 lowerFile.contains("netflix") || lowerFile.contains("netmirror") ||
                 lowerFile.contains("watchparty") || lowerFile.contains("watch party") || lowerFile.contains("syncplay") ||
-                lowerClass.contains("watchparty") || lowerClass.contains("watch_party") || lowerClass.contains("syncplay")
+                lowerClass.contains("watchparty") || lowerClass.contains("watch_party") || lowerClass.contains("syncplay") ||
+                NsfwHelper.isAdult(name, data.url) ||
+                NsfwHelper.isAdult(data.internalName, data.url) ||
+                NsfwHelper.isAdult(fileName, data.url)
 
             if (isBlocked) {
                 Log.i(TAG, "Deleting and skipping blocked/unwanted plugin: $name / ${data.internalName}")
@@ -943,8 +943,9 @@ object PluginManager {
         if (internalName.contains("netflix", ignoreCase = true) ||
             internalName.contains("netmirror", ignoreCase = true) ||
             pluginUrl.contains("netmirror", ignoreCase = true) ||
-            pluginUrl.contains("netflix", ignoreCase = true)) {
-            Log.i(TAG, "Blocked downloading plugin: $internalName")
+            pluginUrl.contains("netflix", ignoreCase = true) ||
+            NsfwHelper.isAdult(internalName, pluginUrl)) {
+            Log.i(TAG, "Blocked downloading NSFW/unwanted plugin: $internalName")
             return false
         }
         try {

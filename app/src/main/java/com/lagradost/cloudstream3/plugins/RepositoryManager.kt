@@ -10,6 +10,7 @@ import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.amap
 import com.lagradost.cloudstream3.app
 import com.lagradost.cloudstream3.mvvm.logError
+import com.lagradost.cloudstream3.NsfwHelper
 import com.lagradost.cloudstream3.mvvm.safe
 import com.lagradost.cloudstream3.mvvm.safeAsync
 import com.lagradost.cloudstream3.plugins.PluginManager.getPluginSanitizedFileName
@@ -186,7 +187,9 @@ object RepositoryManager {
     }
 
     private suspend fun parsePlugins(pluginUrls: String): List<SitePlugin> {
-        if (pluginUrls.contains("netmirror", ignoreCase = true) || pluginUrls.contains("netflix", ignoreCase = true)) {
+        if (pluginUrls.contains("netmirror", ignoreCase = true) ||
+            pluginUrls.contains("netflix", ignoreCase = true) ||
+            NsfwHelper.isAdult(pluginUrls, pluginUrls)) {
             return emptyList()
         }
         return try {
@@ -199,14 +202,21 @@ object RepositoryManager {
                     it.internalName.contains("netflix", ignoreCase = true) ||
                     it.internalName.contains("netmirror", ignoreCase = true) ||
                     it.url.contains("netmirror", ignoreCase = true) ||
-                    it.url.contains("netflix", ignoreCase = true)
+                    it.url.contains("netflix", ignoreCase = true) ||
+                    NsfwHelper.isAdult(it.name, it.url, null, it.tvTypes) ||
+                    NsfwHelper.isAdult(it.internalName, it.url, null, it.tvTypes)
                 }
             }
             // If the URL is another Repository manifest, parse its inner pluginLists!
             val subRepo = response.parsedSafe<Repository>()
             if (subRepo != null && subRepo.pluginLists.isNotEmpty()) {
+                if (NsfwHelper.isAdult(subRepo.name, subRepo.description)) {
+                    return emptyList()
+                }
                 return subRepo.pluginLists.filterNot {
-                    it.contains("netmirror", ignoreCase = true) || it.contains("netflix", ignoreCase = true)
+                    it.contains("netmirror", ignoreCase = true) ||
+                    it.contains("netflix", ignoreCase = true) ||
+                    NsfwHelper.isAdult(it, it)
                 }.amap { subUrl ->
                     parsePlugins(subUrl)
                 }.flatten().filterNot {
@@ -215,7 +225,9 @@ object RepositoryManager {
                     it.internalName.contains("netflix", ignoreCase = true) ||
                     it.internalName.contains("netmirror", ignoreCase = true) ||
                     it.url.contains("netmirror", ignoreCase = true) ||
-                    it.url.contains("netflix", ignoreCase = true)
+                    it.url.contains("netflix", ignoreCase = true) ||
+                    NsfwHelper.isAdult(it.name, it.url, null, it.tvTypes) ||
+                    NsfwHelper.isAdult(it.internalName, it.url, null, it.tvTypes)
                 }
             }
             emptyList()
@@ -229,10 +241,18 @@ object RepositoryManager {
      * Gets all plugins from repositories and pairs them with the repository url
      */
     suspend fun getRepoPlugins(repositoryData: RepositoryData): List<PluginWrapper>? {
+        if (NsfwHelper.isAdult(repositoryData.name, repositoryData.url)) {
+            return emptyList()
+        }
         val repo = parseRepository(repositoryData.url)
         if (repo != null) {
+            if (NsfwHelper.isAdult(repo.name, repo.description)) {
+                return emptyList()
+            }
             val list = repo.pluginLists.filterNot {
-                it.contains("netmirror", ignoreCase = true) || it.contains("netflix", ignoreCase = true)
+                it.contains("netmirror", ignoreCase = true) ||
+                it.contains("netflix", ignoreCase = true) ||
+                NsfwHelper.isAdult(it, it)
             }.amap { url ->
                 parsePlugins(url).map {
                     PluginWrapper(repo, repositoryData, it)
@@ -243,7 +263,9 @@ object RepositoryManager {
                 it.plugin.internalName.contains("netflix", ignoreCase = true) ||
                 it.plugin.internalName.contains("netmirror", ignoreCase = true) ||
                 it.plugin.url.contains("netmirror", ignoreCase = true) ||
-                it.plugin.url.contains("netflix", ignoreCase = true)
+                it.plugin.url.contains("netflix", ignoreCase = true) ||
+                NsfwHelper.isAdult(it.plugin.name, it.plugin.url, null, it.plugin.tvTypes) ||
+                NsfwHelper.isAdult(it.plugin.internalName, it.plugin.url, null, it.plugin.tvTypes)
             }
             if (list.isNotEmpty()) return list
         }
@@ -259,7 +281,10 @@ object RepositoryManager {
                     manifestVersion = 1,
                     pluginLists = listOf(repositoryData.url)
                 )
-                directPlugins.map { PluginWrapper(dummyRepo, repositoryData, it) }
+                directPlugins.filterNot {
+                    NsfwHelper.isAdult(it.name, it.url, null, it.tvTypes) ||
+                    NsfwHelper.isAdult(it.internalName, it.url, null, it.tvTypes)
+                }.map { PluginWrapper(dummyRepo, repositoryData, it) }
             } else null
         }
     }

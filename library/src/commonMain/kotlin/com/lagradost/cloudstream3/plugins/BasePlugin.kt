@@ -21,8 +21,9 @@ abstract class BasePlugin {
         if (element.name.contains("netflix", ignoreCase = true) ||
             element.name.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netmirror", ignoreCase = true) ||
-            element.mainUrl.contains("netflix", ignoreCase = true)) {
-            Log.i(PLUGIN_TAG, "Blocked Netflix MainAPI: ${element.name}")
+            element.mainUrl.contains("netflix", ignoreCase = true) ||
+            com.lagradost.cloudstream3.NsfwHelper.isAdult(element.name, element.mainUrl, element.supportedTypes)) {
+            Log.i(PLUGIN_TAG, "Blocked NSFW or Unwanted MainAPI: ${element.name}")
             return
         }
         Log.i(PLUGIN_TAG, "Adding ${element.name} (${element.mainUrl}) MainAPI")
@@ -39,8 +40,9 @@ abstract class BasePlugin {
         if (element.name.contains("netflix", ignoreCase = true) ||
             element.name.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netmirror", ignoreCase = true) ||
-            element.mainUrl.contains("netflix", ignoreCase = true)) {
-            Log.i(PLUGIN_TAG, "Blocked Netflix ExtractorApi: ${element.name}")
+            element.mainUrl.contains("netflix", ignoreCase = true) ||
+            com.lagradost.cloudstream3.NsfwHelper.isAdult(element.name, element.mainUrl)) {
+            Log.i(PLUGIN_TAG, "Blocked NSFW or Unwanted ExtractorApi: ${element.name}")
             return
         }
         Log.i(PLUGIN_TAG, "Adding ${element.name} (${element.mainUrl}) ExtractorApi")

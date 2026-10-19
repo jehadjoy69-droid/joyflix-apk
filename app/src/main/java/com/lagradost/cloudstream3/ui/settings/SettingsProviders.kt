@@ -77,29 +77,34 @@ class SettingsProviders : BasePreferenceFragmentCompat() {
         }
 
         getPref(R.string.prefer_media_type_key)?.setOnPreferenceClickListener {
-            val names = enumValues<TvType>().sorted().map { it.name }
-            val default =
-                enumValues<TvType>().sorted().filter { it != TvType.NSFW }.map { it.ordinal }
+            val validTypes = enumValues<TvType>().filter { it != TvType.NSFW }.sorted()
+            val names = validTypes.map { it.name }
+            val default = validTypes.map { it.ordinal }
             val defaultSet = default.map { it.toString() }.toSet()
             val currentList = try {
                 settingsManager.getStringSet(getString(R.string.prefer_media_type_key), defaultSet)
-                    ?.map {
-                        it.toInt()
-                    }
+                    ?.mapNotNull {
+                        it.toIntOrNull()
+                    }?.filter { it != TvType.NSFW.ordinal }
             } catch (e: Throwable) {
                 null
             } ?: default
 
+            val currentIndexList = currentList.mapNotNull { ord ->
+                validTypes.indexOfFirst { it.ordinal == ord }.takeIf { it >= 0 }
+            }
+
             activity?.showMultiDialog(
                 names,
-                currentList,
+                currentIndexList,
                 getString(R.string.preferred_media_settings),
                 {}
-            ) { selectedList ->
+            ) { selectedIndexes ->
+                val selectedOrdinals = selectedIndexes.map { validTypes[it].ordinal.toString() }.toMutableSet()
                 settingsManager.edit {
                     putStringSet(
                         getString(R.string.prefer_media_type_key),
-                        selectedList.map { it.toString() }.toMutableSet()
+                        selectedOrdinals
                     )
                 }
                 DataStoreHelper.currentHomePage = null
