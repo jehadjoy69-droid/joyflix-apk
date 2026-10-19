@@ -76,8 +76,15 @@ class SettingsProviders : BasePreferenceFragmentCompat() {
             true
         }
 
+        getPref(R.string.enable_nsfw_on_providers_key)?.setOnPreferenceChangeListener { _, newValue ->
+            val enabled = newValue as? Boolean ?: false
+            MainAPI.settingsForProvider.enableAdult = enabled
+            true
+        }
+
         getPref(R.string.prefer_media_type_key)?.setOnPreferenceClickListener {
-            val validTypes = enumValues<TvType>().filter { it != TvType.NSFW }.sorted()
+            val isAdult = com.lagradost.cloudstream3.NsfwHelper.isAdultEnabled
+            val validTypes = enumValues<TvType>().filter { isAdult || it != TvType.NSFW }.sorted()
             val names = validTypes.map { it.name }
             val default = validTypes.map { it.ordinal }
             val defaultSet = default.map { it.toString() }.toSet()
@@ -85,7 +92,7 @@ class SettingsProviders : BasePreferenceFragmentCompat() {
                 settingsManager.getStringSet(getString(R.string.prefer_media_type_key), defaultSet)
                     ?.mapNotNull {
                         it.toIntOrNull()
-                    }?.filter { it != TvType.NSFW.ordinal }
+                    }?.filter { isAdult || it != TvType.NSFW.ordinal }
             } catch (e: Throwable) {
                 null
             } ?: default

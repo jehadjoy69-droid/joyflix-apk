@@ -96,8 +96,8 @@ class PluginsViewModel : ViewModel() {
                 val plugins = getPlugins(repository)
 
                 plugins.filter { pluginWrapper ->
-                    !NsfwHelper.isAdult(pluginWrapper.plugin.name, pluginWrapper.plugin.url, null, pluginWrapper.plugin.tvTypes) &&
-                    !NsfwHelper.isAdult(pluginWrapper.plugin.internalName, pluginWrapper.plugin.url, null, pluginWrapper.plugin.tvTypes) &&
+                    !NsfwHelper.isBlocked(pluginWrapper.plugin.name, pluginWrapper.plugin.url, null, pluginWrapper.plugin.tvTypes) &&
+                    !NsfwHelper.isBlocked(pluginWrapper.plugin.internalName, pluginWrapper.plugin.url, null, pluginWrapper.plugin.tvTypes) &&
                     !isDownloaded(
                         activity,
                         pluginWrapper.plugin.internalName,
@@ -174,10 +174,10 @@ class PluginsViewModel : ViewModel() {
             pluginWrapper.repositoryData.url
         )
 
-        if (!file.exists() && (NsfwHelper.isAdult(metadata.name, metadata.url, null, metadata.tvTypes) ||
-            NsfwHelper.isAdult(metadata.internalName, metadata.url, null, metadata.tvTypes))) {
+        if (!file.exists() && (NsfwHelper.isBlocked(metadata.name, metadata.url, null, metadata.tvTypes) ||
+            NsfwHelper.isBlocked(metadata.internalName, metadata.url, null, metadata.tvTypes))) {
             runOnMainThread {
-                showToast("18+ extensions are blocked", Toast.LENGTH_SHORT)
+                showToast("18+ extensions are disabled in Settings", Toast.LENGTH_SHORT)
             }
             return@ioSafe
         }
@@ -217,8 +217,8 @@ class PluginsViewModel : ViewModel() {
         }
 
         val list = plugins.filter {
-            !NsfwHelper.isAdult(it.plugin.name, it.plugin.url, null, it.plugin.tvTypes) &&
-            !NsfwHelper.isAdult(it.plugin.internalName, it.plugin.url, null, it.plugin.tvTypes)
+            !NsfwHelper.isBlocked(it.plugin.name, it.plugin.url, null, it.plugin.tvTypes) &&
+            !NsfwHelper.isBlocked(it.plugin.internalName, it.plugin.url, null, it.plugin.tvTypes)
         }.map { plugin ->
             PluginViewData(plugin, isDownloaded(context, plugin.plugin.internalName, plugin.repositoryData.url))
         }
@@ -232,12 +232,12 @@ class PluginsViewModel : ViewModel() {
     // Perhaps can be optimized?
     private fun List<PluginViewData>.filterTvTypes(): List<PluginViewData> {
         val baseList = this.filterNot {
-            NsfwHelper.isAdult(it.pluginWrapper.plugin.name, it.pluginWrapper.plugin.url, null, it.pluginWrapper.plugin.tvTypes) ||
-            NsfwHelper.isAdult(it.pluginWrapper.plugin.internalName, it.pluginWrapper.plugin.url, null, it.pluginWrapper.plugin.tvTypes)
+            NsfwHelper.isBlocked(it.pluginWrapper.plugin.name, it.pluginWrapper.plugin.url, null, it.pluginWrapper.plugin.tvTypes) ||
+            NsfwHelper.isBlocked(it.pluginWrapper.plugin.internalName, it.pluginWrapper.plugin.url, null, it.pluginWrapper.plugin.tvTypes)
         }
         if (tvTypes.isEmpty()) return baseList
         return baseList.filter {
-            (it.pluginWrapper.plugin.tvTypes?.any { type -> tvTypes.contains(type) && !type.equals(TvType.NSFW.name, ignoreCase = true) } == true) ||
+            (it.pluginWrapper.plugin.tvTypes?.any { type -> tvTypes.contains(type) && (NsfwHelper.isAdultEnabled || !type.equals(TvType.NSFW.name, ignoreCase = true)) } == true) ||
                     (tvTypes.contains(TvType.Others.name) && (it.pluginWrapper.plugin.tvTypes
                         ?: emptyList()).isEmpty())
         }
@@ -315,8 +315,8 @@ class PluginsViewModel : ViewModel() {
         val downloadedPlugins = (PluginManager.getPluginsOnline() + PluginManager.getPluginsLocal())
             .distinctBy { it.filePath }
             .filterNot {
-                NsfwHelper.isAdult(it.internalName, it.url) ||
-                NsfwHelper.isAdult(File(it.filePath).nameWithoutExtension, it.url)
+                NsfwHelper.isBlocked(it.internalName, it.url) ||
+                NsfwHelper.isBlocked(File(it.filePath).nameWithoutExtension, it.url)
             }
             .map {
                 PluginViewData(PluginWrapper.getLocalPluginWrapper(it.toSitePlugin()), true)

@@ -22,7 +22,7 @@ abstract class BasePlugin {
             element.name.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netflix", ignoreCase = true) ||
-            com.lagradost.cloudstream3.NsfwHelper.isAdult(element.name, element.mainUrl, element.supportedTypes)) {
+            com.lagradost.cloudstream3.NsfwHelper.isBlocked(element.name, element.mainUrl, element.supportedTypes)) {
             Log.i(PLUGIN_TAG, "Blocked NSFW or Unwanted MainAPI: ${element.name}")
             return
         }
@@ -41,7 +41,7 @@ abstract class BasePlugin {
             element.name.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netmirror", ignoreCase = true) ||
             element.mainUrl.contains("netflix", ignoreCase = true) ||
-            com.lagradost.cloudstream3.NsfwHelper.isAdult(element.name, element.mainUrl)) {
+            com.lagradost.cloudstream3.NsfwHelper.isBlocked(element.name, element.mainUrl)) {
             Log.i(PLUGIN_TAG, "Blocked NSFW or Unwanted ExtractorApi: ${element.name}")
             return
         }

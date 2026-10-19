@@ -31,7 +31,8 @@ class SetupFragmentMedia : BaseFragment<FragmentSetupMediaBinding>(
             val arrayAdapter =
                 ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
 
-            val sortedTypes = enumValues<TvType>().filter { it != TvType.NSFW }.sorted()
+            val isAdult = com.lagradost.cloudstream3.NsfwHelper.isAdultEnabled
+            val sortedTypes = enumValues<TvType>().filter { isAdult || it != TvType.NSFW }.sorted()
 
             arrayAdapter.addAll(sortedTypes.map { it.name })
             binding.apply {

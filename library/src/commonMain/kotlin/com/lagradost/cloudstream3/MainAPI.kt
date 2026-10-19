@@ -125,6 +125,9 @@ object NsfwHelper {
 
     private val ADULT_WORD_REGEX = Regex("(?i)(^|[^a-zA-Z0-9])(nsfw|18\\+|adult|hentai|jav|xxx|porn|erotic)([^a-zA-Z0-9]|$)")
 
+    val isAdultEnabled: Boolean
+        get() = MainAPI.settingsForProvider.enableAdult
+
     fun isAdult(
         name: String?,
         url: String? = null,
@@ -146,6 +149,16 @@ object NsfwHelper {
             if (ADULT_WORD_REGEX.containsMatchIn(str)) return true
         }
         return false
+    }
+
+    fun isBlocked(
+        name: String?,
+        url: String? = null,
+        supportedTypes: Set<TvType>? = null,
+        tvTypes: List<String>? = null
+    ): Boolean {
+        if (isAdultEnabled) return false
+        return isAdult(name, url, supportedTypes, tvTypes)
     }
 }
 
@@ -175,7 +188,7 @@ object APIHolder {
     var apiMap: Map<String, Int>? = null
 
     fun addPluginMapping(plugin: MainAPI) {
-        if (NsfwHelper.isAdult(plugin.name, plugin.mainUrl, plugin.supportedTypes)) {
+        if (NsfwHelper.isBlocked(plugin.name, plugin.mainUrl, plugin.supportedTypes)) {
             return
         }
         apis.withLock {

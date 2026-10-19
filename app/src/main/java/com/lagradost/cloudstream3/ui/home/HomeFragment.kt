@@ -293,8 +293,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             others: Chip?,
         ): List<Pair<Chip?, List<TvType>>> {
             // This list should be same order as home screen to aid navigation
-            nsfw?.isVisible = false
-            return listOf(
+            val list = mutableListOf(
                 Pair(movies, listOf(TvType.Movie)),
                 Pair(tvs, listOf(TvType.TvSeries)),
                 Pair(anime, listOf(TvType.Anime, TvType.OVA, TvType.AnimeMovie)),
@@ -303,8 +302,14 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                 Pair(docs, listOf(TvType.Documentary)),
                 Pair(livestream, listOf(TvType.Live)),
                 Pair(torrent, listOf(TvType.Torrent)),
-                Pair(others, listOf(TvType.Others)),
             )
+            if (com.lagradost.cloudstream3.NsfwHelper.isAdultEnabled) {
+                list.add(Pair(nsfw, listOf(TvType.NSFW)))
+            } else {
+                nsfw?.isVisible = false
+            }
+            list.add(Pair(others, listOf(TvType.Others)))
+            return list
         }
 
         private fun getPairList(header: TvtypesChipsBinding) = getPairList(
@@ -316,7 +321,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
             header.homeSelectAsian,
             header.homeSelectLivestreams,
             header.homeSelectTorrents,
-            header.homeSelectNsfw.apply { isVisible = false },
+            header.homeSelectNsfw.apply { isVisible = com.lagradost.cloudstream3.NsfwHelper.isAdultEnabled },
             header.homeSelectOthers
         )
 
@@ -488,8 +493,7 @@ class HomeFragment : BaseFragment<FragmentHomeBinding>(
                     arrayAdapter.clear()
                     val sortedApis = validAPIs
                         .filter {
-                            if (it.supportedTypes.contains(TvType.NSFW) ||
-                                com.lagradost.cloudstream3.NsfwHelper.isAdult(it.name, it.mainUrl, it.supportedTypes)) {
+                            if (com.lagradost.cloudstream3.NsfwHelper.isBlocked(it.name, it.mainUrl, it.supportedTypes)) {
                                 return@filter false
                             }
                             val isPinned = pinnedphashset.contains(it.name)

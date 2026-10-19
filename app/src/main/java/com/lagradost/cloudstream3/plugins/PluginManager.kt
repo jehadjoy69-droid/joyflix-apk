@@ -259,8 +259,8 @@ object PluginManager {
                     i.contains("watchparty") || i.contains("watch party") || i.contains("syncplay") ||
                     n.contains("netflix") || n.contains("netmirror") ||
                     i.contains("netflix") || i.contains("netmirror") ||
-                    NsfwHelper.isAdult(name, url, null, tvTypes) ||
-                    NsfwHelper.isAdult(internalName, url, null, tvTypes)
+                    NsfwHelper.isBlocked(name, url, null, tvTypes) ||
+                    NsfwHelper.isBlocked(internalName, url, null, tvTypes)
         }
 
         try {
@@ -533,10 +533,9 @@ object PluginManager {
                 return@mapNotNull null
             }
 
-            // Omit NSFW / Adult plugins completely
-            if (tvtypes.contains(TvType.NSFW.name) ||
-                NsfwHelper.isAdult(sitePlugin.name, sitePlugin.url, null, tvtypes) ||
-                NsfwHelper.isAdult(sitePlugin.internalName, sitePlugin.url, null, tvtypes)) {
+            // Omit NSFW / Adult plugins if not enabled
+            if (NsfwHelper.isBlocked(sitePlugin.name, sitePlugin.url, null, tvtypes) ||
+                NsfwHelper.isBlocked(sitePlugin.internalName, sitePlugin.url, null, tvtypes)) {
                 return@mapNotNull null
             }
 
@@ -780,9 +779,9 @@ object PluginManager {
                 lowerFile.contains("netflix") || lowerFile.contains("netmirror") ||
                 lowerFile.contains("watchparty") || lowerFile.contains("watch party") || lowerFile.contains("syncplay") ||
                 lowerClass.contains("watchparty") || lowerClass.contains("watch_party") || lowerClass.contains("syncplay") ||
-                NsfwHelper.isAdult(name, data.url) ||
-                NsfwHelper.isAdult(data.internalName, data.url) ||
-                NsfwHelper.isAdult(fileName, data.url)
+                NsfwHelper.isBlocked(name, data.url) ||
+                NsfwHelper.isBlocked(data.internalName, data.url) ||
+                NsfwHelper.isBlocked(fileName, data.url)
 
             if (isBlocked) {
                 Log.i(TAG, "Deleting and skipping blocked/unwanted plugin: $name / ${data.internalName}")
@@ -944,7 +943,7 @@ object PluginManager {
             internalName.contains("netmirror", ignoreCase = true) ||
             pluginUrl.contains("netmirror", ignoreCase = true) ||
             pluginUrl.contains("netflix", ignoreCase = true) ||
-            NsfwHelper.isAdult(internalName, pluginUrl)) {
+            NsfwHelper.isBlocked(internalName, pluginUrl)) {
             Log.i(TAG, "Blocked downloading NSFW/unwanted plugin: $internalName")
             return false
         }
