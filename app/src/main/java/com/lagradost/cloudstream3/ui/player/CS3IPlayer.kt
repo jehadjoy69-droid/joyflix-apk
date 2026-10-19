@@ -390,7 +390,7 @@ class CS3IPlayer : IPlayer {
             exoPlayer?.currentTracks?.groups
                 ?.filter { it.type == TRACK_TYPE_AUDIO }
                 ?.find { group ->
-                    group.getFormats().any { (format, _) ->
+                    group.getFormats(ignoreSupported = true).any { (format, _) ->
                         format.id == trackId
                     }
                 }
@@ -420,15 +420,15 @@ class CS3IPlayer : IPlayer {
     /**
      * Gets all supported formats in a list
      * */
-    private fun List<Tracks.Group>.getFormats(): List<Pair<Format, Int>> {
+    private fun List<Tracks.Group>.getFormats(ignoreSupported: Boolean = false): List<Pair<Format, Int>> {
         return this.flatMap {
-            it.getFormats()
+            it.getFormats(ignoreSupported)
         }
     }
 
-    private fun Tracks.Group.getFormats(): List<Pair<Format, Int>> {
+    private fun Tracks.Group.getFormats(ignoreSupported: Boolean = false): List<Pair<Format, Int>> {
         return (0 until this.mediaTrackGroup.length).mapNotNull { i ->
-            if (this.isSupported)
+            if (ignoreSupported || this.isSupported)
                 this.mediaTrackGroup.getFormat(i) to i
             else null
         }
@@ -473,7 +473,7 @@ class CS3IPlayer : IPlayer {
         var currentAudioTrack: AudioTrack? = null
         val audioTracks = allTrackGroups.filter { it.type == TRACK_TYPE_AUDIO }
             .flatMap { group ->
-                group.getFormats().map { (format, formatIndex) ->
+                group.getFormats(ignoreSupported = true).map { (format, formatIndex) ->
                     val audioTrack = format.toAudioTrack(formatIndex)
                     if (group.isTrackSelected(formatIndex)) {
                         currentAudioTrack = audioTrack
@@ -663,7 +663,7 @@ class CS3IPlayer : IPlayer {
     }
 
     companion object {
-        private const val CRONET_TIMEOUT_MS = 15_000
+        private const val CRONET_TIMEOUT_MS = 60_000
 
         /**
          * Single shared engine, to minimize the overhead of maintaining many as:
@@ -807,7 +807,11 @@ class CS3IPlayer : IPlayer {
             val source = if (interceptor == null) {
                 if (effectiveEngine == null) {
                     Log.d(TAG, "Using DefaultHttpDataSource for $link")
-                    OkHttpDataSource.Factory(app.baseClient).setUserAgent(userAgent)
+                    val client = app.baseClient.newBuilder()
+                        .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                        .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
+                        .build()
+                    OkHttpDataSource.Factory(client).setUserAgent(userAgent)
                 } else {
                     Log.d(TAG, "Using CronetDataSource for $link")
                     CronetDataSource.Factory(effectiveEngine, Executors.newSingleThreadExecutor())
@@ -820,6 +824,8 @@ class CS3IPlayer : IPlayer {
             } else {
                 Log.d(TAG, "Using OkHttpDataSource for $link")
                 val client = app.baseClient.newBuilder()
+                    .connectTimeout(45, java.util.concurrent.TimeUnit.SECONDS)
+                    .readTimeout(60, java.util.concurrent.TimeUnit.SECONDS)
                     .addInterceptor(interceptor)
                     .build()
                 OkHttpDataSource.Factory(client).setUserAgent(userAgent)
@@ -1580,7 +1586,10 @@ class CS3IPlayer : IPlayer {
                     // This is to switch mirrors automatically if the stream has not been fetched, but
                     // allow playing the buffer without internet as then the duration is fetched.
                     when {
-                        error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                        (error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_FAILED
+                                || error.errorCode == PlaybackException.ERROR_CODE_IO_NETWORK_CONNECTION_TIMEOUT
+                                || error.errorCode == PlaybackException.ERROR_CODE_TIMEOUT
+                                || error.cause is java.net.SocketTimeoutException)
                                 && exoPlayer?.duration != TIME_UNSET -> {
                             exoPlayer?.prepare()
                         }

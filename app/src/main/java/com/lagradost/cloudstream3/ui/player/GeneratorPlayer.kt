@@ -1497,7 +1497,7 @@ class GeneratorPlayer : FullScreenPlayer() {
                 val audioList = binding.autoTracksList
 
                 binding.videoTracksHolder.isVisible = currentVideoTracks.size > 1
-                binding.audioTracksHolder.isVisible = currentAudioTracks.size > 1
+                binding.audioTracksHolder.isVisible = currentAudioTracks.isNotEmpty()
 
                 fun dismiss() {
                     if (isPlaying) {
@@ -1546,19 +1546,25 @@ class GeneratorPlayer : FullScreenPlayer() {
                     ArrayAdapter<String>(ctx, R.layout.sort_bottom_single_choice)
 
                 audioArrayAdapter.addAll(
-                    currentAudioTracks.mapIndexed { _, track ->
+                    currentAudioTracks.mapIndexed { index, track ->
+                        val rawLang = track.language?.trim()
+                        val parsedLang = rawLang?.takeIf {
+                            !it.equals("und", ignoreCase = true) && !it.equals("unknown", ignoreCase = true)
+                        }?.let { raw ->
+                            fromTagToLanguageName(raw)
+                                ?: fromTagToLanguageName(raw.replace('_', '-').substringBefore('-').lowercase())
+                                ?: raw
+                        }
 
-                        val language = (
-                                track.language?.trim()?.let { raw ->
-                                    fromTagToLanguageName(raw)
-                                        ?: fromTagToLanguageName(
-                                            raw.replace('_', '-').substringBefore('-').lowercase()
-                                        )
-                                        ?: raw
-                                }
-                                    ?: track.label
-                                    ?: "Audio"
-                                ).replaceFirstChar { it.uppercaseChar() }
+                        val label = track.label?.trim()?.ifBlank { null }
+                        val displayLang = when {
+                            !label.isNullOrBlank() && !parsedLang.isNullOrBlank() -> {
+                                if (label.contains(parsedLang, ignoreCase = true)) label else "$parsedLang ($label)"
+                            }
+                            !label.isNullOrBlank() -> label
+                            !parsedLang.isNullOrBlank() -> parsedLang
+                            else -> "Audio ${index + 1}"
+                        }.replaceFirstChar { it.uppercaseChar() }
 
                         val codec = audioCodecName(track.sampleMimeType)
 
@@ -1575,13 +1581,10 @@ class GeneratorPlayer : FullScreenPlayer() {
                         }
 
                         listOfNotNull(
-                            language.takeIf { it.isNotBlank() }
-                                ?.replaceFirstChar { it.uppercaseChar() },
+                            displayLang.takeIf { it.isNotBlank() },
                             channels.takeIf { it.isNotBlank() },
                             codec.takeIf { it.isNotBlank() }?.uppercase()
                         ).joinToString(" • ")
-
-
                     }
                 )
 
