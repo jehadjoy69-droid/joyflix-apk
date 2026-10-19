@@ -47,10 +47,12 @@ class CrossTmdbProvider : TmdbProvider() {
         items: List<SearchResponse>,
         cleanTitle: String,
         releaseYear: Int?,
-        isTv: Boolean
+        isTv: Boolean,
+        season: Int? = null
     ): SearchResponse? {
         if (items.isEmpty()) return null
         val cleanNoYear = if (releaseYear != null) cleanTitle.removeSuffix("$releaseYear") else cleanTitle
+        val seasonRegex = Regex("""(?:\bseason|\bs)\s*(\d+)""", RegexOption.IGNORE_CASE)
 
         var bestMatch: SearchResponse? = null
         var highestScore = -100
@@ -89,12 +91,15 @@ class CrossTmdbProvider : TmdbProvider() {
 
             // 2. Year Matching
             if (releaseYear != null && itemYear != null) {
-                val diff = kotlin.math.abs(itemYear - releaseYear)
+                val diff = itemYear - releaseYear
                 if (diff == 0) {
                     score += 25
-                } else if (diff == 1) {
+                } else if (kotlin.math.abs(diff) == 1) {
                     score += 10
-                } else if (diff > 2) {
+                } else if (isTv && (season ?: 1) > 1 && diff > 1) {
+                    // Later seasons naturally air in a later year (e.g. Stranger Things S5 in 2025 vs 2016)
+                    score += 15
+                } else if (kotlin.math.abs(diff) > 2) {
                     score -= 20
                 }
             }
@@ -107,6 +112,20 @@ class CrossTmdbProvider : TmdbProvider() {
             } else {
                 if (item.type == TvType.Movie || item.type == TvType.AnimeMovie || item.type == TvType.Torrent) {
                     score += 15
+                }
+            }
+
+            // 4. Season specific scoring
+            if (isTv && season != null) {
+                val matchSeason = seasonRegex.find(item.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                if (matchSeason != null) {
+                    if (matchSeason == season) {
+                        score += 35
+                    } else {
+                        score -= 60
+                    }
+                } else if (season == 1) {
+                    score += 10
                 }
             }
 
@@ -215,26 +234,41 @@ class CrossTmdbProvider : TmdbProvider() {
 
         if (tmdbId != null) {
             if (isTv && season != null && episode != null) {
-                embedUrls.add("https://player.autoembed.cc/embed/tv/$tmdbId/$season/$episode")
-                embedUrls.add("https://vidsrc.xyz/embed/tv?tmdb=$tmdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.me/embed/tv?tmdb=$tmdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.net/embed/tv/$tmdbId/$season/$episode")
+                embedUrls.add("https://vidsrc.pm/embed/tv/$tmdbId/$season/$episode")
+                embedUrls.add("https://vidsrc.io/embed/tv/$tmdbId/$season/$episode")
                 embedUrls.add("https://vidsrc.to/embed/tv/$tmdbId/$season/$episode")
-                embedUrls.add("https://www.2embed.cc/embedtv/$tmdbId&s=$season&e=$episode")
+                embedUrls.add("https://2embed.cc/embedtv/$tmdbId&s=$season&e=$episode")
+                embedUrls.add("https://multiembed.mov/?video_id=$tmdbId&tmdb=1&s=$season&e=$episode")
+                embedUrls.add("https://autoembed.co/tv/tmdb/$tmdbId-$season-$episode")
             } else {
-                embedUrls.add("https://player.autoembed.cc/embed/movie/$tmdbId")
-                embedUrls.add("https://vidsrc.xyz/embed/movie?tmdb=$tmdbId")
+                embedUrls.add("https://vidsrc.me/embed/movie?tmdb=$tmdbId")
+                embedUrls.add("https://vidsrc.net/embed/movie/$tmdbId")
+                embedUrls.add("https://vidsrc.pm/embed/movie/$tmdbId")
+                embedUrls.add("https://vidsrc.io/embed/movie/$tmdbId")
                 embedUrls.add("https://vidsrc.to/embed/movie/$tmdbId")
-                embedUrls.add("https://vidsrc.cc/v2/embed/movie/$tmdbId")
-                embedUrls.add("https://www.2embed.cc/embed/$tmdbId")
+                embedUrls.add("https://2embed.cc/embed/$tmdbId")
+                embedUrls.add("https://multiembed.mov/?video_id=$tmdbId&tmdb=1")
+                embedUrls.add("https://autoembed.co/movie/tmdb/$tmdbId")
             }
         }
 
         if (!imdbId.isNullOrBlank()) {
             if (isTv && season != null && episode != null) {
-                embedUrls.add("https://vidsrc.xyz/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
                 embedUrls.add("https://vidsrc.me/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.net/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.pm/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+                embedUrls.add("https://vidsrc.io/embed/tv?imdb=$imdbId&season=$season&episode=$episode")
+                embedUrls.add("https://multiembed.mov/?video_id=$imdbId&s=$season&e=$episode")
+                embedUrls.add("https://autoembed.co/tv/imdb/$imdbId-$season-$episode")
             } else {
-                embedUrls.add("https://vidsrc.xyz/embed/movie?imdb=$imdbId")
                 embedUrls.add("https://vidsrc.me/embed/movie?imdb=$imdbId")
+                embedUrls.add("https://vidsrc.net/embed/movie?imdb=$imdbId")
+                embedUrls.add("https://vidsrc.pm/embed/movie?imdb=$imdbId")
+                embedUrls.add("https://vidsrc.io/embed/movie?imdb=$imdbId")
+                embedUrls.add("https://multiembed.mov/?video_id=$imdbId")
+                embedUrls.add("https://autoembed.co/movie/imdb/$imdbId")
             }
         }
 
@@ -403,6 +437,11 @@ class CrossTmdbProvider : TmdbProvider() {
                     // If direct sync not available, search with title variations
                     if (loaded == null) {
                         val searchQueries = linkedSetOf<String>()
+                        if (isTv && season > 1) {
+                            searchQueries.add("$title Season $season")
+                            searchQueries.add("$title S$season")
+                            searchQueries.add("$title $season")
+                        }
                         searchQueries.add(title)
                         if (title.contains("&")) {
                             searchQueries.add(title.replace("&", "and"))
@@ -415,6 +454,9 @@ class CrossTmdbProvider : TmdbProvider() {
                         val cleanQuery = title.replace(Regex("""[^a-zA-Z0-9\s]"""), " ")
                             .replace(Regex("""\s+"""), " ").trim()
                         if (cleanQuery.isNotBlank() && !cleanQuery.equals(title, ignoreCase = true)) {
+                            if (isTv && season > 1) {
+                                searchQueries.add("$cleanQuery Season $season")
+                            }
                             searchQueries.add(cleanQuery)
                         }
 
@@ -422,12 +464,28 @@ class CrossTmdbProvider : TmdbProvider() {
                             try {
                                 val res = api.search(q)
                                 if (!res.isNullOrEmpty()) {
-                                    val match = findMatchingItem(res, cleanTitle, releaseYear, isTv)
+                                    val match = findMatchingItem(res, cleanTitle, releaseYear, isTv, season)
                                     if (match != null) {
                                         val matchLoaded = api.load(match.url)
                                         if (matchLoaded != null) {
-                                            loaded = matchLoaded
-                                            break
+                                            if (isTv && season > 1 && matchLoaded is TvSeriesLoadResponse) {
+                                                val hasSeason = matchLoaded.episodes.any { it.season == season } ||
+                                                    matchLoaded.name.contains("season $season", ignoreCase = true) ||
+                                                    matchLoaded.name.contains("season$season", ignoreCase = true) ||
+                                                    matchLoaded.name.contains("s$season", ignoreCase = true) ||
+                                                    matchLoaded.url.contains("season-$season", ignoreCase = true) ||
+                                                    matchLoaded.url.contains("season$season", ignoreCase = true) ||
+                                                    matchLoaded.url.contains("s$season", ignoreCase = true)
+                                                if (hasSeason) {
+                                                    loaded = matchLoaded
+                                                    break
+                                                } else if (loaded == null) {
+                                                    loaded = matchLoaded
+                                                }
+                                            } else {
+                                                loaded = matchLoaded
+                                                break
+                                            }
                                         }
                                     }
                                 }
@@ -440,25 +498,47 @@ class CrossTmdbProvider : TmdbProvider() {
                         val targetData: String? = if (isTv) {
                             when (loaded) {
                                 is TvSeriesLoadResponse -> {
+                                    val pageName = loaded.name.lowercase()
+                                    val pageUrl = loaded.url.lowercase()
+                                    val isDedicatedSeasonPage = pageName.contains("season $season") ||
+                                        pageName.contains("season$season") ||
+                                        pageName.contains("s$season") ||
+                                        pageUrl.contains("season-$season") ||
+                                        pageUrl.contains("season$season") ||
+                                        pageUrl.contains("s$season")
+
                                     val targetEp = loaded.episodes.firstOrNull { ep ->
                                         ep.season == season && ep.episode == episode
-                                    } ?: if (season == 1) {
+                                    } ?: if (isDedicatedSeasonPage) {
+                                        loaded.episodes.firstOrNull { ep ->
+                                            ep.episode == episode || (ep.season == season && ep.episode == episode)
+                                        } ?: (if (episode > 0) loaded.episodes.getOrNull(episode - 1) else null)
+                                    } else if (season == 1) {
                                         loaded.episodes.firstOrNull { ep ->
                                             (ep.season == 1 || ep.season == null || ep.season == 0) && ep.episode == episode
-                                        }
+                                        } ?: (if (episode > 0) loaded.episodes.getOrNull(episode - 1) else null)
                                     } else {
-                                        loaded.episodes.firstOrNull { ep ->
-                                            ep.episode == episode
+                                        // For season > 1, check if this show has any episodes tagged with this season
+                                        val seasonEps = loaded.episodes.filter { it.season == season }
+                                        if (seasonEps.isNotEmpty()) {
+                                            seasonEps.firstOrNull { it.episode == episode }
+                                        } else {
+                                            val hasAnyNumberedSeasons = loaded.episodes.any { (it.season ?: 0) > 1 } ||
+                                                loaded.episodes.any { it.season == 1 }
+                                            if (!hasAnyNumberedSeasons) {
+                                                // Flat episode list with no season numbers at all
+                                                loaded.episodes.firstOrNull { it.episode == episode }
+                                            } else {
+                                                // Scraper has other seasons (e.g. S1-S4) but NOT season 5!
+                                                // Must return null so we don't wrongly play Season 1 Episode 5!
+                                                null
+                                            }
                                         }
-                                    } ?: (if (episode > 0) loaded.episodes.getOrNull(episode - 1) else null)
-                                    ?: loaded.episodes.firstOrNull()
+                                    }
 
-                                    targetEp?.data ?: loaded.url
+                                    targetEp?.data
                                 }
-                                is MovieLoadResponse -> {
-                                    loaded.dataUrl.ifBlank { null } ?: loaded.url
-                                }
-                                else -> loaded.url
+                                else -> null
                             }
                         } else {
                             when (loaded) {
