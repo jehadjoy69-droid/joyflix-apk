@@ -315,15 +315,17 @@ class StreamSourcesDialogFragment : DialogFragment() {
             ?: Regex("""themoviedb\.org/(?:movie|tv)/(\d+)""").find(resp?.url ?: rawEpisode.data ?: "")
                 ?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: resp?.syncData?.get("tmdb")?.toIntOrNull()
-        val imdbId = parsedTmdbLink?.imdbID ?: resp?.syncData?.get("imdb")
-        val movieTitle = parsedTmdbLink?.movieName ?: resp?.name ?: rawEpisode.name
+        val imdbId = (if (isTv) resp?.syncData?.get("imdb") ?: parsedTmdbLink?.imdbID else parsedTmdbLink?.imdbID ?: resp?.syncData?.get("imdb"))?.ifBlank { null }
+        val movieTitle = (resp?.name?.ifBlank { null } ?: parsedTmdbLink?.movieName?.ifBlank { null } ?: rawEpisode.name)?.trim().orEmpty()
         val year = parsedTmdbLink?.year ?: resp?.year
+        val season = if (isTv) (rawEpisode.season ?: parsedTmdbLink?.season ?: 1) else null
+        val episodeNum = if (isTv) (rawEpisode.episode ?: parsedTmdbLink?.episode ?: 1) else null
 
         val safeTmdbLink = TmdbLink(
             imdbID = imdbId,
             tmdbID = tmdbId,
-            episode = if (isTv) rawEpisode.episode else null,
-            season = if (isTv) (rawEpisode.season ?: 1) else null,
+            episode = episodeNum,
+            season = season,
             movieName = movieTitle,
             year = year,
             isAnime = isAnime
@@ -744,10 +746,11 @@ class StreamSourcesAdapter(
             title.text = cleanName
 
             val qualityStr = Qualities.getStringByInt(link.quality)
+            val provider = linkItem.providerName
             quality.text = if (qualityStr.isNotBlank() && qualityStr != "Unknown") {
-                "$qualityStr • Unknown"
+                "$qualityStr • $provider"
             } else {
-                qualityStr.ifBlank { "Unknown" }
+                provider
             }
 
             if (qualityStr.isNotBlank() && qualityStr != "Unknown") {

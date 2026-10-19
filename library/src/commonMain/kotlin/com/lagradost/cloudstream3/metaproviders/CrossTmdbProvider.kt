@@ -43,6 +43,84 @@ class CrossTmdbProvider : TmdbProvider() {
         return Regex("""[^a-zA-Z0-9]""").replace(name, "").lowercase()
     }
 
+    private fun findMatchingItem(
+        items: List<SearchResponse>,
+        cleanTitle: String,
+        releaseYear: Int?,
+        isTv: Boolean
+    ): SearchResponse? {
+        val cleanNoYear = if (releaseYear != null) cleanTitle.removeSuffix("$releaseYear") else cleanTitle
+
+        var bestMatch: SearchResponse? = null
+        var highestScore = -1
+
+        for (item in items) {
+            // 1. Strict media type check: do not mix movies and TV series
+            if (isTv) {
+                if (item.type == TvType.Movie || item.type == TvType.AnimeMovie) continue
+            } else {
+                if (item.type == TvType.TvSeries || item.type == TvType.AsianDrama) continue
+            }
+
+            // 2. Year check: discard if release year difference is greater than 1
+            val itemYear = item.yearOrNull
+            if (releaseYear != null && itemYear != null) {
+                if (kotlin.math.abs(itemYear - releaseYear) > 1) {
+                    continue
+                }
+            }
+
+            val itemClean = filterName(item.name)
+            if (itemClean.isBlank()) continue
+            val itemCleanNoYear = if (itemYear != null) itemClean.removeSuffix("$itemYear") else itemClean
+
+            var score = 0
+            val isExact = itemClean == cleanTitle ||
+                itemCleanNoYear == cleanNoYear ||
+                itemClean == cleanNoYear ||
+                itemCleanNoYear == cleanTitle
+
+            if (isExact) {
+                score = if (itemYear != null && releaseYear != null && itemYear == releaseYear) {
+                    100
+                } else if (itemYear != null && releaseYear != null && kotlin.math.abs(itemYear - releaseYear) <= 1) {
+                    95
+                } else {
+                    90
+                }
+            } else if (cleanNoYear.length >= 4 && itemCleanNoYear.startsWith(cleanNoYear)) {
+                val diff = itemCleanNoYear.length - cleanNoYear.length
+                if (diff <= 8) {
+                    score = if (itemYear != null && releaseYear != null && itemYear == releaseYear) {
+                        80
+                    } else if (itemYear == null || releaseYear == null) {
+                        75
+                    } else {
+                        70
+                    }
+                }
+            } else if (cleanNoYear.length >= 6 && itemCleanNoYear.length >= 5 && cleanNoYear.startsWith(itemCleanNoYear)) {
+                val diff = cleanNoYear.length - itemCleanNoYear.length
+                if (diff <= 4) {
+                    score = if (itemYear != null && releaseYear != null && itemYear == releaseYear) {
+                        75
+                    } else if (itemYear == null || releaseYear == null) {
+                        70
+                    } else {
+                        65
+                    }
+                }
+            }
+
+            if (score >= 70 && score > highestScore) {
+                highestScore = score
+                bestMatch = item
+            }
+        }
+
+        return bestMatch
+    }
+
     interface ScraperListener {
         fun onScrapersDiscovered(scrapers: List<String>)
         fun onScraperStarted(scraper: String)
@@ -333,7 +411,14 @@ class CrossTmdbProvider : TmdbProvider() {
                         try {
                             val syncUrl = api.getLoadUrl(SyncIdName.Imdb, imdbId)
                             if (!syncUrl.isNullOrBlank()) {
-                                loaded = api.load(syncUrl)
+                                val syncLoaded = api.load(syncUrl)
+                                if (syncLoaded != null) {
+                                    if (isTv && syncLoaded is TvSeriesLoadResponse) {
+                                        loaded = syncLoaded
+                                    } else if (!isTv && syncLoaded !is TvSeriesLoadResponse) {
+                                        loaded = syncLoaded
+                                    }
+                                }
                             }
                         } catch (e: Exception) {
                             logError(e)
@@ -358,64 +443,53 @@ class CrossTmdbProvider : TmdbProvider() {
                             searchQueries.add(cleanQuery)
                         }
 
-                        var items: List<SearchResponse> = emptyList()
                         for (q in searchQueries) {
                             try {
                                 val res = api.search(q)
                                 if (!res.isNullOrEmpty()) {
-                                    items = res
-                                    break
+                                    val match = findMatchingItem(res, cleanTitle, releaseYear, isTv)
+                                    if (match != null) {
+                                        val matchLoaded = api.load(match.url)
+                                        if (matchLoaded != null) {
+                                            if (isTv && matchLoaded is TvSeriesLoadResponse) {
+                                                loaded = matchLoaded
+                                                break
+                                            } else if (!isTv && matchLoaded !is TvSeriesLoadResponse) {
+                                                loaded = matchLoaded
+                                                break
+                                            }
+                                        }
+                                    }
                                 }
                             } catch (_: Throwable) {
-                            }
-                        }
-
-                        if (items.isNotEmpty()) {
-                            val match = items.firstOrNull { item ->
-                                val itemClean = filterName(item.name)
-                                val matches = itemClean == cleanTitle ||
-                                    (cleanTitle.isNotEmpty() && itemClean.contains(cleanTitle)) ||
-                                    (itemClean.isNotEmpty() && cleanTitle.contains(itemClean))
-                                matches && (releaseYear == null || item.yearOrNull == null || item.yearOrNull == releaseYear)
-                            } ?: items.firstOrNull { item ->
-                                val itemClean = filterName(item.name)
-                                itemClean == cleanTitle ||
-                                    (cleanTitle.isNotEmpty() && itemClean.contains(cleanTitle)) ||
-                                    (itemClean.isNotEmpty() && cleanTitle.contains(itemClean))
-                            } ?: items.firstOrNull()
-
-                            if (match != null) {
-                                loaded = api.load(match.url)
                             }
                         }
                     }
 
                     if (loaded != null) {
                         val targetData: String? = if (isTv) {
-                            when (loaded) {
-                                is TvSeriesLoadResponse -> {
-                                    val targetEp = loaded.episodes.firstOrNull { ep ->
-                                        ep.season == season && ep.episode == episode
-                                    } ?: (if (season == 1) loaded.episodes.firstOrNull { it.episode == episode } else null)
-                                    ?: loaded.episodes.getOrNull(episode - 1)
-                                    ?: loaded.episodes.firstOrNull()
+                            if (loaded is TvSeriesLoadResponse) {
+                                val targetEp = loaded.episodes.firstOrNull { ep ->
+                                    ep.season == season && ep.episode == episode
+                                } ?: if (season == 1) {
+                                    loaded.episodes.firstOrNull { ep ->
+                                        (ep.season == 1 || ep.season == null || ep.season == 0) && ep.episode == episode
+                                    }
+                                } else {
+                                    null
+                                }
 
-                                    targetEp?.data
-                                }
-                                is MovieLoadResponse -> {
-                                    loaded.dataUrl.ifBlank { null } ?: loaded.url
-                                }
-                                else -> loaded.url
+                                targetEp?.data
+                            } else {
+                                null
                             }
                         } else {
-                            when (loaded) {
-                                is MovieLoadResponse -> {
-                                    loaded.dataUrl.ifBlank { null } ?: loaded.url
-                                }
-                                is TvSeriesLoadResponse -> {
-                                    loaded.episodes.firstOrNull()?.data ?: loaded.url
-                                }
-                                else -> loaded.url
+                            if (loaded is MovieLoadResponse) {
+                                loaded.dataUrl.ifBlank { null } ?: loaded.url
+                            } else if (loaded is TvSeriesLoadResponse) {
+                                null
+                            } else {
+                                loaded.url
                             }
                         }
 
