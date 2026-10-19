@@ -23,28 +23,36 @@ enum class CloudStreamPrimaryColor(val color: Color) {
     DANDELION_YELLOW(Color(0xFFF5BB00)),
     COOL_BLUE(Color(0xFF408CAC)),
     LAVENDER(Color(0xFF6F55AF)),
+    DEX_WHITE(Color(0xFFF5F5F5)),
+    DEX_ARCTIC_BLUE(Color(0xFF3185F5)),
+    DEX_GOLD(Color(0xFFE8A91C)),
+    DEX_JADE(Color(0xFF22D37C)),
+    DEX_ROSE_GOLD(Color(0xFFEC70A9)),
+    DEX_CRIMSON(Color(0xFFE53935)),
+    DEX_OCEAN(Color(0xFF1E88E5)),
+    DEX_EMERALD(Color(0xFF43A047)),
     DYNAMIC(Color(0xFFE50914)),
     DYNAMIC_TWO(Color(0xFFE50914)),
 }
 
 
 internal object CloudStreamPalette {
-    // Default dark (AppTheme / Black)
+    // Default dark (AppTheme / Black / DEX)
     val Primary = Color(0xFFE50914)
     val PrimaryDark = Color(0xFFB20710)
     val Ongoing = Color(0xFFF53B66)
 
-    val DarkPrimaryGrayBg = Color(0xFF2B2C30)
-    val DarkBlackBg = Color(0xFF111111)
-    val DarkIconGrayBg = Color(0xFF1C1C20)
-    val DarkBoxItemBg = Color(0xFF161616)
-    val DarkText = Color(0xFFE9EAEE)
-    val DarkGrayText = Color(0xFF9BA0A4)
-    val DarkIcon = Color(0xFF9BA0A6)
+    val DarkPrimaryGrayBg = Color(0xFF1A1A1A)
+    val DarkBlackBg = Color(0xFF0D0D0D)
+    val DarkIconGrayBg = Color(0xFF1A1A1A)
+    val DarkBoxItemBg = Color(0xFF222222)
+    val DarkText = Color(0xFFF5F7F8)
+    val DarkGrayText = Color(0xFF969CA3)
+    val DarkIcon = Color(0xFF969CA3)
 
     // Amoled
     val AmoledBlack = Color(0xFF000000)
-    val AmoledNearBlack = Color(0xFF121212)
+    val AmoledNearBlack = Color(0xFF0D0D0D)
 
     // Light
     val LightPrimaryGrayBg = Color(0xFFF1F1F1)

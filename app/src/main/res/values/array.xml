@@ -256,6 +256,14 @@
 
     <string-array name="themes_overlay_names">
         <item>Normal</item>
+        <item>DEX White</item>
+        <item>DEX Arctic Blue</item>
+        <item>DEX Gold</item>
+        <item>DEX Jade</item>
+        <item>DEX Rose Gold</item>
+        <item>DEX Crimson</item>
+        <item>DEX Ocean</item>
+        <item>DEX Emerald</item>
         <item>Dandelion Yellow</item>
         <item>Carnation Pink</item>
         <item>Orange</item>
@@ -280,6 +288,14 @@
     </string-array>
     <string-array name="themes_overlay_names_values">
         <item>Normal</item>
+        <item>DexWhite</item>
+        <item>DexArcticBlue</item>
+        <item>DexGold</item>
+        <item>DexJade</item>
+        <item>DexRoseGold</item>
+        <item>DexCrimson</item>
+        <item>DexOcean</item>
+        <item>DexEmerald</item>
         <item>DandelionYellow</item>
         <item>CarnationPink</item>
         <item>Orange</item>
@@ -304,6 +320,7 @@
     </string-array>
 
     <string-array name="themes_names">
+        <item>DEX (JoyFlix)</item>
         <item>Dark</item>
         <item>Gray</item>
         <item>Amoled</item>
@@ -315,6 +332,7 @@
         <item>Silent Blue</item>
     </string-array>
     <string-array name="themes_names_values">
+        <item>DEX</item>
         <item>AmoledLight</item>
         <item>Black</item>
         <item>Amoled</item>

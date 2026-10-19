@@ -316,7 +316,7 @@ object CommonActivity {
     fun updateTheme(act: Activity) {
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(act)
         if (settingsManager
-                .getString(act.getString(R.string.app_theme_key), "AmoledLight") == "System"
+                .getString(act.getString(R.string.app_theme_key), "DEX") == "System"
             && Build.VERSION.SDK_INT >= Build.VERSION_CODES.Q
         ) {
             loadThemes(act)
@@ -341,25 +341,34 @@ object CommonActivity {
         val settingsManager = PreferenceManager.getDefaultSharedPreferences(act)
 
         val currentTheme =
-            when (settingsManager.getString(act.getString(R.string.app_theme_key), "AmoledLight")) {
+            when (settingsManager.getString(act.getString(R.string.app_theme_key), "DEX")) {
                 "System" -> mapSystemTheme(act)
+                "DEX", "JoyflixDex" -> R.style.DexMode
                 "Black" -> R.style.AppTheme
                 "Light" -> R.style.LightMode
                 "Amoled" -> R.style.AmoledMode
                 "AmoledLight" -> R.style.AmoledModeLight
                 "Monet" -> if (Build.VERSION.SDK_INT >= Build.VERSION_CODES.S)
-                    R.style.MonetMode else R.style.AppTheme
+                    R.style.MonetMode else R.style.DexMode
 
                 "Dracula" -> R.style.DraculaMode
                 "Lavender" -> R.style.LavenderMode
                 "SilentBlue" -> R.style.SilentBlueMode
 
-                else -> R.style.AppTheme
+                else -> R.style.DexMode
             }
 
         val currentOverlayTheme =
             when (settingsManager.getString(act.getString(R.string.primary_color_key), "Normal")) {
                 "Normal" -> R.style.OverlayPrimaryColorNormal
+                "DexWhite" -> R.style.OverlayPrimaryColorDexWhite
+                "DexArcticBlue" -> R.style.OverlayPrimaryColorDexArcticBlue
+                "DexGold" -> R.style.OverlayPrimaryColorDexGold
+                "DexJade" -> R.style.OverlayPrimaryColorDexJade
+                "DexRoseGold" -> R.style.OverlayPrimaryColorDexRoseGold
+                "DexCrimson" -> R.style.OverlayPrimaryColorDexCrimson
+                "DexOcean" -> R.style.OverlayPrimaryColorDexOcean
+                "DexEmerald" -> R.style.OverlayPrimaryColorDexEmerald
                 "DandelionYellow" -> R.style.OverlayPrimaryColorDandelionYellow
                 "CarnationPink" -> R.style.OverlayPrimaryColorCarnationPink
                 "Orange" -> R.style.OverlayPrimaryColorOrange

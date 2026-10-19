@@ -2,19 +2,19 @@
 <resources>
     <color name="colorPrimary">#E50914</color>
     <color name="colorPrimarySecond">@color/colorPrimary</color>
-    <color name="colorSearch">#1E1E24</color>
+    <color name="colorSearch">#1A1A1A</color>
     <color name="colorOngoing">#E50914</color>
     <color name="colorPrimaryDark">#B20710</color>
     <color name="colorAccent">#E50914</color>
 
-    <color name="primaryGrayBackground">#181820</color>
-    <color name="primaryBlackBackground">#0B0B0E</color>
-    <color name="iconGrayBackground">#16161D</color>
-    <color name="boxItemBackground">#14141A</color>
+    <color name="primaryGrayBackground">#1A1A1A</color>
+    <color name="primaryBlackBackground">#0D0D0D</color>
+    <color name="iconGrayBackground">#1A1A1A</color>
+    <color name="boxItemBackground">#222222</color>
 
-    <color name="textColor">#e9eaee</color> <!--FFF-->
-    <color name="grayTextColor">#9ba0a4</color> <!-- 5e5f62-->
-    <color name="grayShimmer">#DCDCDC</color> <!-- 5e5f62-->
+    <color name="textColor">#F5F7F8</color> <!-- DEX Text Primary -->
+    <color name="grayTextColor">#969CA3</color> <!-- DEX Text Muted / Secondary -->
+    <color name="grayShimmer">#222222</color> <!-- DEX Card Shimmer -->
 
     <color name="searchColorTransparent">#1AFFFFFF</color> <!--DADADA-->
     <color name="transparent">#00000000</color>
@@ -30,7 +30,7 @@
     <color name="progressBackgroundColor">#1AFFFFFF</color>
 
     <color name="dubColorText">#121950</color> <!--3b65f5 f18c82 8294F1-->
-    <color name="amoledModeLight">#121213</color>
+    <color name="amoledModeLight">#1A1A1A</color>
 
     <color name="dubColorBg">#3B65F5</color>
     <color name="subColorText">#571711</color> <!--F53B66 FA3D79-->
@@ -49,13 +49,37 @@
     <color name="video_button_ripple">#32FFFFFF</color>
 
     <color name="black_overlay">#66000000</color>
-    <color name="darkBarTransparent">#C0121212</color>
-    <color name="skipOpTransparent">#4D121212</color>
-    <color name="darkBar">#121212</color>
+    <color name="darkBarTransparent">#C00D0D0D</color>
+    <color name="skipOpTransparent">#4D0D0D0D</color>
+    <color name="darkBar">#0D0D0D</color>
     <color name="videoProgress">#66B5B5B5</color> <!--66B5B5B5-->
     <!--<color name="videoCache">#663D50FA</color>--> <!--66B5B5B5-->
 
-    <color name="iconColor">#9ba0a6</color>
+    <color name="iconColor">#969CA3</color>
+
+    <!-- DEX Theme Palette -->
+    <color name="dex_background">#0D0D0D</color>
+    <color name="dex_background_elevated">#1A1A1A</color>
+    <color name="dex_background_card">#222222</color>
+    <color name="dex_text_primary">#F5F7F8</color>
+    <color name="dex_text_muted">#969CA3</color>
+    <color name="dex_text_secondary">#B8BEC5</color>
+    <color name="dex_border">#252A2A</color>
+    <color name="dex_error">#E36A8A</color>
+
+    <!-- DEX Accent Palettes -->
+    <color name="dex_white">#F5F5F5</color>
+    <color name="dex_arctic_blue">#3185F5</color>
+    <color name="dex_gold">#E8A91C</color>
+    <color name="dex_jade">#22D37C</color>
+    <color name="dex_rose_gold">#EC70A9</color>
+    <color name="dex_crimson">#E53935</color>
+    <color name="dex_ocean">#1E88E5</color>
+    <color name="dex_emerald">#43A047</color>
+    <color name="dex_amber">#FB8C00</color>
+    <color name="dex_rose">#D81B60</color>
+    <color name="dex_graphite">#AAB2BE</color>
+    <color name="dex_violet">#8E24AA</color>
 
     <!-- <color name="usedStorageColor">?attr/white</color>#fff-->
     <!-- <color name="freeStorageColor">?attr/grayTextColor</color> #676767-->

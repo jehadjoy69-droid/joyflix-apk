@@ -98,6 +98,19 @@ internal fun darkScheme() = CloudStreamColorScheme(
 )
 
 
+internal fun dexScheme() = CloudStreamColorScheme(
+    background = CloudStreamPalette.DarkBlackBg,
+    surfaceVariant = CloudStreamPalette.DarkPrimaryGrayBg,
+    surface = CloudStreamPalette.DarkIconGrayBg,
+    surfaceContainer = CloudStreamPalette.DarkBoxItemBg,
+    onBackground = CloudStreamPalette.DarkText,
+    onSurfaceVariant = CloudStreamPalette.DarkGrayText,
+    icon = CloudStreamPalette.DarkIcon,
+    primary = CloudStreamPalette.Primary,
+    ongoing = CloudStreamPalette.Ongoing,
+    isLight = false,
+)
+
 internal fun amoledScheme() = darkScheme().copy(
     background = CloudStreamPalette.AmoledBlack,
     surface = CloudStreamPalette.AmoledBlack,
@@ -105,9 +118,7 @@ internal fun amoledScheme() = darkScheme().copy(
     surfaceContainer = CloudStreamPalette.AmoledBlack,
 )
 
-internal fun amoledLightScheme() = amoledScheme().copy(
-    surfaceVariant = CloudStreamPalette.AmoledNearBlack,
-)
+internal fun amoledLightScheme() = dexScheme()
 
 internal fun lightScheme() = CloudStreamColorScheme(
     background = CloudStreamPalette.LightBlackBg,

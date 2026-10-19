@@ -23,6 +23,9 @@ enum class CloudStreamThemeMode {
     /** "AmoledLight" pure black (#000000) */
     AmoledLight,
 
+    /** "DEX" official JoyFlix DEX palette */
+    DEX,
+
     /** "Light" white/gray backgrounds, dark text */
     Light,
 
@@ -56,11 +59,12 @@ fun modeToTheme(mode : CloudStreamThemeMode, primaryColor: CloudStreamPrimaryCol
             CloudStreamThemeMode.Dark -> darkScheme()
             CloudStreamThemeMode.Amoled -> amoledScheme()
             CloudStreamThemeMode.AmoledLight -> amoledLightScheme()
+            CloudStreamThemeMode.DEX -> dexScheme()
             CloudStreamThemeMode.Light -> lightScheme()
             CloudStreamThemeMode.Dracula -> draculaScheme()
             CloudStreamThemeMode.Lavender -> lavenderScheme()
             CloudStreamThemeMode.SilentBlue -> silentBlueScheme()
-            CloudStreamThemeMode.FollowSystem -> if (systemDark) darkScheme() else lightScheme()
+            CloudStreamThemeMode.FollowSystem -> if (systemDark) dexScheme() else lightScheme()
             CloudStreamThemeMode.Dynamic -> dynamicTheme
         }
         when {

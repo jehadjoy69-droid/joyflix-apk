@@ -85,9 +85,24 @@
         <item name="android:drawSelectorOnTop">false</item>
     </style>
 
-    <style name="AmoledModeLight" parent="AmoledMode">
-        <item name="primaryGrayBackground">@color/amoledModeLight</item>
-        <item name="boxItemBackground">@color/amoledModeLight</item>
+    <style name="AmoledModeLight" parent="AppTheme">
+        <item name="primaryBlackBackground">@color/primaryBlackBackground</item>
+        <item name="primaryGrayBackground">@color/primaryGrayBackground</item>
+        <item name="iconGrayBackground">@color/iconGrayBackground</item>
+        <item name="boxItemBackground">@color/boxItemBackground</item>
+        <item name="textColor">@color/textColor</item>
+        <item name="grayTextColor">@color/grayTextColor</item>
+        <item name="iconColor">@color/iconColor</item>
+    </style>
+
+    <style name="DexMode" parent="AppTheme">
+        <item name="primaryBlackBackground">@color/dex_background</item>
+        <item name="primaryGrayBackground">@color/dex_background_elevated</item>
+        <item name="iconGrayBackground">@color/dex_background_elevated</item>
+        <item name="boxItemBackground">@color/dex_background_card</item>
+        <item name="textColor">@color/dex_text_primary</item>
+        <item name="grayTextColor">@color/dex_text_muted</item>
+        <item name="iconColor">@color/dex_text_muted</item>
     </style>
 
     <style name="ChipFilled" parent="@style/Widget.Material3.Chip.Filter">
@@ -244,6 +259,78 @@
         <item name="colorOnPrimary">@color/whiteText</item>
         <!-- Needed for leanback fuckery -->
         <item name="android:colorAccent">@color/colorAccent</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexWhite">
+        <item name="colorPrimary">@color/dex_white</item>
+        <item name="android:colorPrimary">@color/dex_white</item>
+        <item name="colorPrimaryDark">#CCCCCC</item>
+        <item name="colorAccent">@color/dex_white</item>
+        <item name="colorOnPrimary">@color/blackText</item>
+        <item name="android:colorAccent">@color/dex_white</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexArcticBlue">
+        <item name="colorPrimary">@color/dex_arctic_blue</item>
+        <item name="android:colorPrimary">@color/dex_arctic_blue</item>
+        <item name="colorPrimaryDark">#1E60B8</item>
+        <item name="colorAccent">@color/dex_arctic_blue</item>
+        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="android:colorAccent">@color/dex_arctic_blue</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexGold">
+        <item name="colorPrimary">@color/dex_gold</item>
+        <item name="android:colorPrimary">@color/dex_gold</item>
+        <item name="colorPrimaryDark">#B38012</item>
+        <item name="colorAccent">@color/dex_gold</item>
+        <item name="colorOnPrimary">@color/blackText</item>
+        <item name="android:colorAccent">@color/dex_gold</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexJade">
+        <item name="colorPrimary">@color/dex_jade</item>
+        <item name="android:colorPrimary">@color/dex_jade</item>
+        <item name="colorPrimaryDark">#19A35F</item>
+        <item name="colorAccent">@color/dex_jade</item>
+        <item name="colorOnPrimary">@color/blackText</item>
+        <item name="android:colorAccent">@color/dex_jade</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexRoseGold">
+        <item name="colorPrimary">@color/dex_rose_gold</item>
+        <item name="android:colorPrimary">@color/dex_rose_gold</item>
+        <item name="colorPrimaryDark">#BD5484</item>
+        <item name="colorAccent">@color/dex_rose_gold</item>
+        <item name="colorOnPrimary">@color/blackText</item>
+        <item name="android:colorAccent">@color/dex_rose_gold</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexCrimson">
+        <item name="colorPrimary">@color/dex_crimson</item>
+        <item name="android:colorPrimary">@color/dex_crimson</item>
+        <item name="colorPrimaryDark">#B72825</item>
+        <item name="colorAccent">@color/dex_crimson</item>
+        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="android:colorAccent">@color/dex_crimson</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexOcean">
+        <item name="colorPrimary">@color/dex_ocean</item>
+        <item name="android:colorPrimary">@color/dex_ocean</item>
+        <item name="colorPrimaryDark">#1565C0</item>
+        <item name="colorAccent">@color/dex_ocean</item>
+        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="android:colorAccent">@color/dex_ocean</item>
+    </style>
+
+    <style name="OverlayPrimaryColorDexEmerald">
+        <item name="colorPrimary">@color/dex_emerald</item>
+        <item name="android:colorPrimary">@color/dex_emerald</item>
+        <item name="colorPrimaryDark">#2E7D32</item>
+        <item name="colorAccent">@color/dex_emerald</item>
+        <item name="colorOnPrimary">@color/whiteText</item>
+        <item name="android:colorAccent">@color/dex_emerald</item>
     </style>
 
     <style name="OverlayPrimaryColorMonet">
