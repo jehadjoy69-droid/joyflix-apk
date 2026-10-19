@@ -312,14 +312,14 @@ class StreamSourcesDialogFragment : DialogFragment() {
         val isTv = (parsedTmdbLink?.season != null && parsedTmdbLink.episode != null) || ((rawEpisode.season ?: 0) > 0)
 
         val tmdbId = parsedTmdbLink?.tmdbID
-            ?: Regex("""themoviedb\.org/(?:movie|tv)/(\d+)""").find(resp?.url ?: rawEpisode.data ?: "")
+            ?: Regex("""themoviedb\.org/(?:movie|tv)/(\d+)""").find(resp?.url ?: rawEpisode.data)
                 ?.groupValues?.getOrNull(1)?.toIntOrNull()
             ?: resp?.syncData?.get("tmdb")?.toIntOrNull()
         val imdbId = (if (isTv) resp?.syncData?.get("imdb") ?: parsedTmdbLink?.imdbID else parsedTmdbLink?.imdbID ?: resp?.syncData?.get("imdb"))?.ifBlank { null }
         val movieTitle = (resp?.name?.ifBlank { null } ?: parsedTmdbLink?.movieName?.ifBlank { null } ?: rawEpisode.name)?.trim().orEmpty()
         val year = parsedTmdbLink?.year ?: resp?.year
         val season = if (isTv) (rawEpisode.season ?: parsedTmdbLink?.season ?: 1) else null
-        val episodeNum = if (isTv) (rawEpisode.episode ?: parsedTmdbLink?.episode ?: 1) else null
+        val episodeNum = if (isTv) (if (rawEpisode.episode > 0) rawEpisode.episode else (parsedTmdbLink?.episode ?: 1)) else null
 
         val safeTmdbLink = TmdbLink(
             imdbID = imdbId,
@@ -375,7 +375,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
         scrapingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
                 tempGenerator.generateLinks(
-                    clearCache = forceRefresh,
+                    clearCache = true,
                     sourceTypes = LOADTYPE_ALL,
                     callback = { (link, _) ->
                         if (link != null && isValidLink(link)) {
