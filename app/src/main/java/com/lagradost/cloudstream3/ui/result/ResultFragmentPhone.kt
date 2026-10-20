@@ -536,7 +536,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     api?.hasDownloadSupport == true,
                     { episodeClick ->
                         when (episodeClick.action) {
-                            ACTION_DOWNLOAD_EPISODE, ACTION_DOWNLOAD_MIRROR -> {
+                            ACTION_DOWNLOAD_EPISODE, ACTION_DOWNLOAD_MIRROR, ACTION_DOWNLOAD_EPISODE_BATCH -> {
                                 requirePathForActions(listOf(episodeClick.action to episodeClick.data))
                             }
 
@@ -861,7 +861,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                             .setTitle(R.string.download_all)
                             .setMessage(rangeMessage)
                             .setPositiveButton(R.string.yes) { _, _ ->
-                                requirePathForActions(episodes.value.map { ACTION_DOWNLOAD_EPISODE to it })
+                                requirePathForActions(episodes.value.map { ACTION_DOWNLOAD_EPISODE_BATCH to it })
                             }
                             .setNegativeButton(R.string.cancel) { _, _ -> }.show()
                     }

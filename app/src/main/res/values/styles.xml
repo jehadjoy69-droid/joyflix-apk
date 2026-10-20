@@ -103,6 +103,60 @@
         <item name="textColor">@color/dex_text_primary</item>
         <item name="grayTextColor">@color/dex_text_muted</item>
         <item name="iconColor">@color/dex_text_muted</item>
+        <item name="android:navigationBarColor">@color/dex_background</item>
+        <item name="android:statusBarColor">@color/dex_background</item>
+        <item name="android:windowBackground">@drawable/splash_background</item>
+    </style>
+
+    <style name="DexNavActiveIndicator" parent="Widget.Material3.BottomNavigationView.ActiveIndicator">
+        <item name="android:width">48dp</item>
+        <item name="android:height">32dp</item>
+        <item name="shapeAppearance">@style/DexShapeAppearancePill</item>
+        <item name="color">@color/dex_nav_indicator_color</item>
+    </style>
+
+    <style name="DexShapeAppearancePill" parent="ShapeAppearance.Material3.Corner.Full">
+        <item name="cornerSize">50%</item>
+    </style>
+
+    <style name="DexHeroPlayButton" parent="WhiteButton">
+        <item name="cornerRadius">40dp</item>
+        <item name="android:layout_height">48dp</item>
+        <item name="android:paddingStart">24dp</item>
+        <item name="android:paddingEnd">24dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="iconSize">22dp</item>
+        <item name="iconPadding">8dp</item>
+        <item name="android:fontFamily">@font/netflix_sans</item>
+        <item name="fontFamily">@font/netflix_sans</item>
+    </style>
+
+    <style name="DexResultPlayButton" parent="WhiteButton">
+        <item name="cornerRadius">40dp</item>
+        <item name="android:layout_height">52dp</item>
+        <item name="android:textSize">16sp</item>
+        <item name="android:textStyle">bold</item>
+        <item name="iconSize">24dp</item>
+        <item name="iconPadding">8dp</item>
+        <item name="android:fontFamily">@font/netflix_sans</item>
+        <item name="fontFamily">@font/netflix_sans</item>
+    </style>
+
+    <style name="DexMetaChip" parent="BlackButton">
+        <item name="android:layout_width">wrap_content</item>
+        <item name="android:layout_height">26dp</item>
+        <item name="cornerRadius">6dp</item>
+        <item name="strokeWidth">1dp</item>
+        <item name="strokeColor">@color/dex_border</item>
+        <item name="backgroundTint">@color/dex_background_card</item>
+        <item name="android:textSize">11sp</item>
+        <item name="android:paddingStart">8dp</item>
+        <item name="android:paddingEnd">8dp</item>
+        <item name="android:paddingTop">0dp</item>
+        <item name="android:paddingBottom">0dp</item>
+        <item name="android:fontFamily">@font/netflix_sans</item>
+        <item name="fontFamily">@font/netflix_sans</item>
     </style>
 
     <style name="ChipFilled" parent="@style/Widget.Material3.Chip.Filter">
@@ -759,9 +813,11 @@
         <item name="android:layout_height">wrap_content</item>
         <item name="android:textColor">?attr/textColor</item>
         <item name="android:gravity">center_vertical</item>
-        <item name="android:textSize">18sp</item>
+        <item name="android:textSize">20sp</item>
         <item name="android:layout_marginEnd">50dp</item>
         <item name="android:textStyle">bold</item>
+        <item name="android:fontFamily">@font/netflix_sans</item>
+        <item name="fontFamily">@font/netflix_sans</item>
     </style>
 
     <style name="SearchBox">
@@ -769,6 +825,8 @@
         <item name="android:minWidth">40dp</item>
         <item name="android:textStyle">bold</item>
         <item name="android:gravity">center</item>
+        <item name="android:fontFamily">@font/netflix_sans</item>
+        <item name="fontFamily">@font/netflix_sans</item>
         <item name="android:layout_width">match_parent</item>
         <item name="android:layout_height">wrap_content</item>
         <item name="android:paddingLeft">7dp</item>

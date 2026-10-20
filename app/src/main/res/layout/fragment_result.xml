@@ -364,24 +364,29 @@
                                 android:layout_marginBottom="5dp"
                                 android:maxLines="2"
                                 android:textColor="?attr/textColor"
-                                android:textSize="20sp"
+                                android:textSize="24sp"
                                 android:textStyle="bold"
+                                android:fontFamily="@font/netflix_sans"
                                 tools:text="The Perfect Run The Perfect Run" />
 
                             <com.lagradost.cloudstream3.widget.FlowLayout
                                 android:layout_width="match_parent"
                                 android:layout_height="wrap_content"
-                                app:itemSpacing="10dp">
+                                app:itemSpacing="8dp">
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/result_meta_site"
-                                    style="@style/SmallBlackButton"
+                                    style="@style/DexMetaChip"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="26dp"
                                     android:layout_gravity="center_vertical"
                                     tools:text="Gogoanime" />
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/result_meta_content_rating"
-                                    style="@style/SmallBlackButton"
+                                    style="@style/DexMetaChip"
+                                    android:layout_width="wrap_content"
+                                    android:layout_height="26dp"
                                     android:layout_gravity="center_vertical"
                                     tools:text="PG-13" />
 
@@ -569,7 +574,7 @@
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/result_add_sync"
-                            style="@style/WhiteButton"
+                            style="@style/DexResultPlayButton"
                             android:layout_width="match_parent"
                             android:layout_gravity="center_vertical"
                             android:layout_marginStart="0dp"
@@ -590,7 +595,7 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/result_resume_series_button"
-                                style="@style/WhiteButton"
+                                style="@style/DexResultPlayButton"
                                 android:layout_width="match_parent"
                                 android:layout_margin="0dp"
                                 android:visibility="visible" />
@@ -672,7 +677,7 @@
 
                             <com.google.android.material.button.MaterialButton
                                 android:id="@+id/result_next_series_button"
-                                style="@style/WhiteButton"
+                                style="@style/DexResultPlayButton"
                                 android:layout_width="match_parent"
                                 android:layout_gravity="center_vertical"
                                 android:layout_marginVertical="5dp"
@@ -703,7 +708,7 @@
 
                                 <com.google.android.material.button.MaterialButton
                                     android:id="@+id/result_play_movie"
-                                    style="@style/WhiteButton"
+                                    style="@style/DexResultPlayButton"
                                     android:layout_width="match_parent"
                                     android:layout_gravity="center_vertical"
                                     android:layout_marginStart="0dp"

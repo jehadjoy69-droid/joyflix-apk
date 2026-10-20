@@ -1629,6 +1629,13 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         val dialog = builder.create()
         selectWatchTogetherDialog = dialog
         dialog.show()
+        dialog.window?.let { window ->
+            val dm = act.resources.displayMetrics
+            val maxDialogHeight = (dm.heightPixels * 0.88).toInt()
+            val maxDialogWidth = (560 * dm.density).toInt().coerceAtMost((dm.widthPixels * 0.94).toInt())
+            window.setLayout(maxDialogWidth, maxDialogHeight)
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
     }
 
     private fun onClickChange() {

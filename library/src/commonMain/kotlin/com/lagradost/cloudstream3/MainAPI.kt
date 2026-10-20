@@ -830,10 +830,22 @@ fun MainAPI.fixUrl(url: String): String {
  */
 fun sortUrls(urls: Set<ExtractorLink>): List<ExtractorLink> {
     return urls.filterNot {
-        it.name.contains("netflix", ignoreCase = true) ||
-        it.source.contains("netflix", ignoreCase = true) ||
-        it.name.contains("netmirror", ignoreCase = true) ||
-        it.source.contains("netmirror", ignoreCase = true)
+        val nameLower = it.name.lowercase()
+        val sourceLower = it.source.lowercase()
+        val urlLower = it.url.lowercase()
+
+        it.url.isBlank() ||
+        nameLower.contains("netflix") ||
+        sourceLower.contains("netflix") ||
+        nameLower.contains("netmirror") ||
+        sourceLower.contains("netmirror") ||
+        urlLower.contains("youtube.com") ||
+        urlLower.contains("youtu.be") ||
+        nameLower.contains("trailer") ||
+        nameLower.contains("teaser") ||
+        nameLower.contains("sample") ||
+        nameLower.contains("promo") ||
+        nameLower.contains("preview")
     }.sortedBy { t -> -t.quality }
 }
 

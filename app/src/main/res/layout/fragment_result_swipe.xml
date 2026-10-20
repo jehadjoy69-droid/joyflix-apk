@@ -8,7 +8,7 @@
 
     <FrameLayout
             android:id="@+id/result_top_bar"
-            android:background="?attr/primaryGrayBackground"
+            android:background="?attr/primaryBlackBackground"
             android:paddingStart="@dimen/result_padding"
             android:paddingEnd="@dimen/result_padding"
             android:layout_width="match_parent"
@@ -21,14 +21,15 @@
                 android:layout_height="wrap_content">
             <ImageView
                     android:nextFocusRight="@id/result_mini_sync"
-                    android:background="?android:attr/selectableItemBackgroundBorderless"
-
+                    android:background="@drawable/dex_circle_button_bg"
+                    android:padding="6dp"
                     android:id="@+id/result_back"
                     android:clickable="true"
                     android:focusable="true"
-
-                    android:layout_width="30dp"
-                    android:layout_height="30dp"
+                    android:layout_marginTop="6dp"
+                    android:layout_marginBottom="6dp"
+                    android:layout_width="36dp"
+                    android:layout_height="36dp"
                     android:layout_gravity="center_vertical|start"
                     android:src="@drawable/ic_baseline_arrow_back_24"
                     android:contentDescription="@string/go_back"

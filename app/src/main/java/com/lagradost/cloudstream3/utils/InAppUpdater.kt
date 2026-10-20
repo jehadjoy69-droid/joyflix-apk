@@ -45,6 +45,62 @@ object InAppUpdater {
     private const val PRERELEASE_PACKAGE_NAME = "com.joyflix.app.prerelease"
     private const val LOG_TAG = "InAppUpdater"
 
+    fun isVersionNewer(remoteVersion: String?, currentVersion: String?): Boolean {
+        if (remoteVersion.isNullOrBlank()) return false
+        if (currentVersion.isNullOrBlank()) return true
+
+        fun cleanVersionString(v: String): String {
+            return v.trim()
+                .removePrefix("v")
+                .removePrefix("V")
+                .substringBefore("-")
+                .substringBefore("+")
+                .substringBefore(" ")
+                .trim()
+        }
+
+        val cleanRemote = cleanVersionString(remoteVersion)
+        val cleanCurrent = cleanVersionString(currentVersion)
+
+        // Same version string means remote is NOT newer
+        if (cleanRemote.equals(cleanCurrent, ignoreCase = true)) {
+            return false
+        }
+
+        val remoteParts = cleanRemote.split(".").mapNotNull { part ->
+            part.trim().takeWhile { it.isDigit() }.takeIf { it.isNotEmpty() }?.toLongOrNull()
+        }
+        val currentParts = cleanCurrent.split(".").mapNotNull { part ->
+            part.trim().takeWhile { it.isDigit() }.takeIf { it.isNotEmpty() }?.toLongOrNull()
+        }
+
+        if (remoteParts.isNotEmpty() && currentParts.isNotEmpty()) {
+            val maxLen = maxOf(remoteParts.size, currentParts.size)
+            for (i in 0 until maxLen) {
+                val r = remoteParts.getOrElse(i) { 0L }
+                val c = currentParts.getOrElse(i) { 0L }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        }
+
+        val rNum = Regex("""\d+""").findAll(cleanRemote).mapNotNull { it.value.toLongOrNull() }.toList()
+        val cNum = Regex("""\d+""").findAll(cleanCurrent).mapNotNull { it.value.toLongOrNull() }.toList()
+        if (rNum.isNotEmpty() && cNum.isNotEmpty()) {
+            val maxLen = maxOf(rNum.size, cNum.size)
+            for (i in 0 until maxLen) {
+                val r = rNum.getOrElse(i) { 0L }
+                val c = cNum.getOrElse(i) { 0L }
+                if (r > c) return true
+                if (r < c) return false
+            }
+            return false
+        }
+
+        return false
+    }
+
     @Serializable
     private data class GithubAsset(
         @JsonProperty("name") @SerialName("name") val name: String = "",
@@ -151,14 +207,8 @@ object InAppUpdater {
             try { packageManager.getPackageInfo(it, 0)?.versionName } catch (_: Exception) { null }
         } ?: BuildConfig.VERSION_NAME
 
-        val remoteVersionNum = maxOf(parseVersion(found.tagName), parseVersion(foundAsset.name))
-        val currentVersionNum = parseVersion(currentVersionName)
-
-        val isNewer = if (remoteVersionNum > 0 && currentVersionNum > 0) {
-            remoteVersionNum > currentVersionNum
-        } else {
-            !found.tagName.trim('v', 'V').equals(currentVersionName.trim('v', 'V'), ignoreCase = true)
-        }
+        val isNewer = isVersionNewer(found.tagName, currentVersionName) ||
+            isVersionNewer(foundAsset.name, currentVersionName)
 
         val shouldUpdate = isNewer && foundAsset.browserDownloadUrl.isNotBlank()
         val displayVersion = found.tagName.ifBlank { foundAsset.name }
@@ -372,26 +422,15 @@ object InAppUpdater {
 
         if (!notice.enabled) return false
 
-        fun parseVersion(versionStr: String?): Long {
-            if (versionStr.isNullOrBlank()) return 0L
-            val clean = versionStr.trim().removePrefix("v").removePrefix("V")
-            val match = Regex("""(\d+)(?:\.(\d+))?(?:\.(\d+))?""").find(clean) ?: return 0L
-            val major = match.groupValues.getOrNull(1)?.toLongOrNull() ?: 0L
-            val minor = match.groupValues.getOrNull(2)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
-            val patch = match.groupValues.getOrNull(3)?.takeIf { it.isNotEmpty() }?.toLongOrNull() ?: 0L
-            return major * 100_000_000L + minor * 10_000L + patch
-        }
-
         val currentVersionName = packageName?.let {
             try { packageManager.getPackageInfo(it, 0)?.versionName } catch (_: Exception) { null }
         } ?: BuildConfig.VERSION_NAME
 
-        val currentVersionNum = parseVersion(currentVersionName)
-        val noticeVersionNum = parseVersion(notice.version)
-
-        // Don't show outdated notice if user is already on a strictly newer version
-        if (noticeVersionNum > 0 && currentVersionNum > 0 && currentVersionNum > noticeVersionNum) {
-            return false
+        // Only show notice if notice version is STRICTLY NEWER than installed app version!
+        if (!notice.version.isNullOrBlank()) {
+            if (!isVersionNewer(notice.version, currentVersionName)) {
+                return false
+            }
         }
 
         // Check if user permanently skipped this notice version

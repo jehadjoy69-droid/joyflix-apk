@@ -66,6 +66,9 @@
     <color name="dex_text_secondary">#B8BEC5</color>
     <color name="dex_border">#252A2A</color>
     <color name="dex_error">#E36A8A</color>
+    <color name="dex_nav_surface">#E61C1C1E</color>
+    <color name="dex_nav_border">#2E3A4040</color>
+    <color name="dex_card_border">#262A2A</color>
 
     <!-- DEX Accent Palettes -->
     <color name="dex_white">#F5F5F5</color>

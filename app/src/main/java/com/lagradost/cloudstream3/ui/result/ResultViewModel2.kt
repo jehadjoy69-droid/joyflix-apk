@@ -1545,7 +1545,44 @@ class ResultViewModel2 : ViewModel() {
                 showToast(R.string.play_episode_toast, Toast.LENGTH_SHORT)
             }
 
-            ACTION_DOWNLOAD_EPISODE -> {
+            ACTION_DOWNLOAD_EPISODE, ACTION_DOWNLOAD_MIRROR -> {
+                val response = currentResponse ?: return
+                val act = activity
+                if (act is androidx.fragment.app.FragmentActivity) {
+                    val list = HashMap<String, String>(response.syncData ?: emptyMap())
+                    val gen = generator ?: RepoLinkGenerator(listOf(click.data), page = response)
+                    val rawIndex = gen.videos.indexOfFirst { value -> value.id == click.data.id }
+                    val index = if (rawIndex < 0) 0 else rawIndex
+                    StreamSourcesDialogFragment.show(
+                        act,
+                        click.data,
+                        response,
+                        gen,
+                        index,
+                        list,
+                        isDownloadOnly = true
+                    )
+                } else {
+                    DownloadQueueManager.addToQueue(
+                        DownloadObjects.DownloadQueueItem(
+                            click.data,
+                            response.isMovie(),
+                            response.name,
+                            response.type,
+                            response.posterUrl,
+                            response.apiName,
+                            response.getId(),
+                            response.url,
+                        ).toWrapper()
+                    )
+                    showToast(
+                        R.string.download_started,
+                        Toast.LENGTH_SHORT
+                    )
+                }
+            }
+
+            ACTION_DOWNLOAD_EPISODE_BATCH -> {
                 val response = currentResponse ?: return
                 DownloadQueueManager.addToQueue(
                     DownloadObjects.DownloadQueueItem(
@@ -1559,34 +1596,6 @@ class ResultViewModel2 : ViewModel() {
                         response.url,
                     ).toWrapper()
                 )
-            }
-
-            ACTION_DOWNLOAD_MIRROR -> {
-                val response = currentResponse ?: return
-                acquireSingleLink(
-                    click.data,
-                    LOADTYPE_INAPP_DOWNLOAD,
-                    txt(R.string.episode_action_download_mirror)
-                ) { (result, index) ->
-                    DownloadQueueManager.addToQueue(
-                        DownloadObjects.DownloadQueueItem(
-                            click.data,
-                            response.isMovie(),
-                            response.name,
-                            response.type,
-                            response.posterUrl,
-                            response.apiName,
-                            response.getId(),
-                            response.url,
-                            listOf(result.links[index]),
-                            result.subs,
-                        ).toWrapper()
-                    )
-                    showToast(
-                        R.string.download_started,
-                        Toast.LENGTH_SHORT
-                    )
-                }
             }
 
             ACTION_RELOAD_EPISODE -> {

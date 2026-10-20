@@ -18,43 +18,57 @@
             android:gravity="center_vertical"
             android:orientation="vertical">
 
-            <LinearLayout
-                android:id="@+id/settings_profile"
+            <androidx.cardview.widget.CardView
                 android:layout_width="match_parent"
                 android:layout_height="wrap_content"
-                android:orientation="horizontal"
-                android:padding="20dp"
-                tools:visibility="visible">
+                android:layout_marginStart="16dp"
+                android:layout_marginEnd="16dp"
+                android:layout_marginTop="16dp"
+                android:layout_marginBottom="12dp"
+                app:cardBackgroundColor="?attr/boxItemBackground"
+                app:cardCornerRadius="16dp"
+                app:cardElevation="0dp">
 
-                <androidx.cardview.widget.CardView
-                    android:layout_width="50dp"
-                    android:layout_height="50dp"
-                    android:foreground="@drawable/outline_big_25_gray"
-                    app:cardCornerRadius="25dp">
-
-                    <ImageView
-                        android:id="@+id/settings_profile_pic"
-                        android:layout_width="match_parent"
-                        android:layout_height="match_parent"
-                        android:contentDescription="@string/account"
-                        android:scaleType="centerCrop"
-                        tools:src="@drawable/profile_bg_orange" />
-
-                </androidx.cardview.widget.CardView>
-
-                <TextView
-                    android:id="@+id/settings_profile_text"
-                    android:layout_width="wrap_content"
+                <LinearLayout
+                    android:id="@+id/settings_profile"
+                    android:layout_width="match_parent"
                     android:layout_height="wrap_content"
-                    android:layout_gravity="center_vertical"
-                    android:gravity="center_vertical"
-                    android:paddingStart="10dp"
-                    android:paddingEnd="10dp"
-                    android:textColor="?attr/textColor"
-                    android:textSize="18sp"
-                    android:textStyle="normal"
-                    tools:text="Quick Brown Fox" />
-            </LinearLayout>
+                    android:background="?android:attr/selectableItemBackground"
+                    android:orientation="horizontal"
+                    android:padding="16dp"
+                    tools:visibility="visible">
+
+                    <androidx.cardview.widget.CardView
+                        android:layout_width="48dp"
+                        android:layout_height="48dp"
+                        android:foreground="@drawable/outline_big_25_gray"
+                        app:cardCornerRadius="24dp">
+
+                        <ImageView
+                            android:id="@+id/settings_profile_pic"
+                            android:layout_width="match_parent"
+                            android:layout_height="match_parent"
+                            android:contentDescription="@string/account"
+                            android:scaleType="centerCrop"
+                            tools:src="@drawable/profile_bg_orange" />
+
+                    </androidx.cardview.widget.CardView>
+
+                    <TextView
+                        android:id="@+id/settings_profile_text"
+                        android:layout_width="wrap_content"
+                        android:layout_height="wrap_content"
+                        android:layout_gravity="center_vertical"
+                        android:gravity="center_vertical"
+                        android:paddingStart="14dp"
+                        android:paddingEnd="14dp"
+                        android:textColor="?attr/textColor"
+                        android:textSize="17sp"
+                        android:textStyle="bold"
+                        android:fontFamily="@font/netflix_sans"
+                        tools:text="Quick Brown Fox" />
+                </LinearLayout>
+            </androidx.cardview.widget.CardView>
 
             <TextView
                 android:id="@+id/settings_general"

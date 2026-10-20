@@ -840,5 +840,12 @@ object WatchTogetherManager {
         }
 
         dialog.show()
+        dialog.window?.let { window ->
+            val dm = activity.resources.displayMetrics
+            val maxDialogHeight = (dm.heightPixels * 0.85).toInt()
+            val maxDialogWidth = (520 * dm.density).toInt().coerceAtMost((dm.widthPixels * 0.94).toInt())
+            window.setLayout(maxDialogWidth, maxDialogHeight)
+            window.setSoftInputMode(android.view.WindowManager.LayoutParams.SOFT_INPUT_ADJUST_RESIZE)
+        }
     }
 }

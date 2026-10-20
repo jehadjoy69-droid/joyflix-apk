@@ -1,5 +1,6 @@
 <?xml version="1.0" encoding="utf-8"?>
 <LinearLayout xmlns:android="http://schemas.android.com/apk/res/android"
+    xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
     android:layout_height="wrap_content"
@@ -14,7 +15,7 @@
     android:orientation="horizontal"
     android:paddingStart="16dp"
     android:paddingTop="10dp"
-    android:paddingEnd="16dp"
+    android:paddingEnd="12dp"
     android:paddingBottom="10dp">
 
     <LinearLayout
@@ -28,6 +29,7 @@
             android:layout_width="wrap_content"
             android:layout_height="wrap_content"
             android:ellipsize="end"
+            android:fontFamily="@font/netflix_sans"
             android:maxLines="1"
             android:textColor="#FFFFFF"
             android:textSize="15sp"
@@ -40,6 +42,7 @@
             android:layout_height="wrap_content"
             android:layout_marginTop="2dp"
             android:ellipsize="end"
+            android:fontFamily="@font/netflix_sans"
             android:maxLines="1"
             android:textColor="#8E8E93"
             android:textSize="13sp"
@@ -52,6 +55,7 @@
         android:layout_height="wrap_content"
         android:layout_marginStart="8dp"
         android:background="@drawable/bg_active_scraper_tag"
+        android:fontFamily="@font/netflix_sans"
         android:paddingStart="8dp"
         android:paddingTop="3dp"
         android:paddingEnd="8dp"
@@ -62,4 +66,17 @@
         android:visibility="gone"
         tools:text="1080p"
         tools:visibility="visible" />
+
+    <ImageView
+        android:id="@+id/source_download_btn"
+        android:layout_width="40dp"
+        android:layout_height="40dp"
+        android:layout_marginStart="8dp"
+        android:background="?attr/selectableItemBackgroundBorderless"
+        android:clickable="true"
+        android:contentDescription="@string/download"
+        android:focusable="false"
+        android:padding="8dp"
+        android:src="@drawable/netflix_download"
+        app:tint="#A5A5AA" />
 </LinearLayout>

@@ -19,9 +19,12 @@ import androidx.recyclerview.widget.DiffUtil
 import androidx.recyclerview.widget.LinearLayoutManager
 import androidx.recyclerview.widget.ListAdapter
 import androidx.recyclerview.widget.RecyclerView
+import android.widget.Toast
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.unixTime
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.LoadResponse.Companion.isMovie
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.R
 import com.lagradost.cloudstream3.TvType
@@ -40,6 +43,8 @@ import com.lagradost.cloudstream3.utils.ExtractorLink
 import com.lagradost.cloudstream3.utils.ImageLoader.loadImage
 import com.lagradost.cloudstream3.utils.Qualities
 import com.lagradost.cloudstream3.utils.UIHelper.navigate
+import com.lagradost.cloudstream3.utils.downloader.DownloadObjects
+import com.lagradost.cloudstream3.utils.downloader.DownloadQueueManager
 import kotlinx.coroutines.Dispatchers
 import kotlinx.coroutines.Job
 import kotlinx.coroutines.delay
@@ -103,6 +108,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
         var pendingGenerator: VideoGenerator<*>? = null
         var pendingIndex: Int = 0
         var pendingSyncData: HashMap<String, String>? = null
+        var pendingIsDownloadOnly: Boolean = false
 
         fun show(
             activity: FragmentActivity?,
@@ -110,7 +116,8 @@ class StreamSourcesDialogFragment : DialogFragment() {
             response: LoadResponse?,
             generator: VideoGenerator<*>?,
             index: Int,
-            syncData: HashMap<String, String>?
+            syncData: HashMap<String, String>?,
+            isDownloadOnly: Boolean = false
         ) {
             if (activity == null || activity.isFinishing) return
             val fm = activity.supportFragmentManager
@@ -122,6 +129,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
             pendingGenerator = generator
             pendingIndex = index
             pendingSyncData = syncData
+            pendingIsDownloadOnly = isDownloadOnly
 
             val dialog = StreamSourcesDialogFragment()
             dialog.show(fm, TAG)
@@ -129,10 +137,12 @@ class StreamSourcesDialogFragment : DialogFragment() {
     }
 
     private var currentEpisode: ResultEpisode? = null
+    private var originalEpisode: ResultEpisode? = null
     private var currentResponse: LoadResponse? = null
     private var currentGenerator: VideoGenerator<*>? = null
     private var currentIndex: Int = 0
     private var syncData: HashMap<String, String>? = null
+    private var isDownloadOnly: Boolean = false
 
     private var scrapingJob: Job? = null
     private var updateJob: Job? = null
@@ -157,10 +167,12 @@ class StreamSourcesDialogFragment : DialogFragment() {
         super.onCreate(savedInstanceState)
         setStyle(STYLE_NORMAL, R.style.DialogFullscreenPlayer)
         currentEpisode = pendingEpisode
+        originalEpisode = pendingEpisode
         currentResponse = pendingResponse
         currentGenerator = pendingGenerator
         currentIndex = pendingIndex
         syncData = pendingSyncData
+        isDownloadOnly = pendingIsDownloadOnly
 
         // Fallback for currentEpisode if null but currentResponse exists
         val resp = currentResponse
@@ -229,17 +241,24 @@ class StreamSourcesDialogFragment : DialogFragment() {
         val episodeNum = ep?.episode
         if (season != null && episodeNum != null && season > 0) {
             val epName = ep.name
+            val prefix = if (isDownloadOnly) "⬇️ Download • " else ""
             subtitleView?.text = if (!epName.isNullOrBlank() && epName != displayTitle) {
-                "Season $season • Episode $episodeNum: $epName"
+                "${prefix}Season $season • Episode $episodeNum: $epName"
             } else {
-                "Season $season • Episode $episodeNum"
+                "${prefix}Season $season • Episode $episodeNum"
             }
             subtitleView?.isVisible = true
         } else if (resp?.year != null) {
-            subtitleView?.text = "${resp.year}"
+            val prefix = if (isDownloadOnly) "⬇️ Select source to download • " else ""
+            subtitleView?.text = "$prefix${resp.year}"
             subtitleView?.isVisible = true
         } else {
-            subtitleView?.isVisible = false
+            if (isDownloadOnly) {
+                subtitleView?.text = "⬇️ Select source to download"
+                subtitleView?.isVisible = true
+            } else {
+                subtitleView?.isVisible = false
+            }
         }
 
         val posterUrl = ep?.poster ?: resp?.posterUrl
@@ -247,9 +266,15 @@ class StreamSourcesDialogFragment : DialogFragment() {
             posterView?.loadImage(posterUrl)
         }
 
-        sourcesAdapter = StreamSourcesAdapter { selectedLink ->
-            playSelectedLink(selectedLink)
-        }
+        sourcesAdapter = StreamSourcesAdapter(
+            isDownloadOnly = isDownloadOnly,
+            onLinkClick = { selectedLink ->
+                playSelectedLink(selectedLink)
+            },
+            onDownloadClick = { selectedLink ->
+                downloadSelectedLink(selectedLink)
+            }
+        )
         recyclerView?.layoutManager = LinearLayoutManager(context)
         recyclerView?.adapter = sourcesAdapter
         recyclerView?.setHasFixedSize(false)
@@ -407,11 +432,19 @@ class StreamSourcesDialogFragment : DialogFragment() {
     private fun isValidLink(link: ExtractorLink): Boolean {
         if (link.url.isBlank()) return false
         if (com.lagradost.cloudstream3.utils.DeadLinkManager.isDead(link.url)) return false
+        val urlLower = link.url.lowercase()
         val nameLower = link.name.lowercase()
         val sourceLower = link.source.lowercase()
+
+        if (urlLower.contains("youtube.com") || urlLower.contains("youtu.be")) return false
+        if (nameLower.contains("trailer") || nameLower.contains("teaser") ||
+            nameLower.contains("sample") || nameLower.contains("promo") ||
+            nameLower.contains("preview")
+        ) return false
         if (nameLower.contains("netflix") || sourceLower.contains("netflix") ||
             nameLower.contains("netmirror") || sourceLower.contains("netmirror")
         ) return false
+
         return true
     }
 
@@ -650,6 +683,40 @@ class StreamSourcesDialogFragment : DialogFragment() {
         )
     }
 
+    private fun downloadSelectedLink(selectedLink: ExtractorLink) {
+        val act = activity ?: return
+        val episode = originalEpisode ?: currentEpisode ?: return
+        val response = currentResponse
+
+        saveCurrentCache()
+
+        val isMovie = response?.isMovie() ?: (episode.tvType == TvType.Movie || episode.tvType == TvType.AnimeMovie)
+        val resultName = response?.name ?: episode.name ?: ""
+        val resultType = response?.type ?: episode.tvType ?: TvType.Movie
+        val resultPoster = response?.posterUrl ?: episode.poster
+        val apiName = response?.apiName ?: episode.apiName
+        val resultId = response?.getId() ?: episode.parentId ?: episode.id
+        val resultUrl = response?.url ?: episode.data
+
+        DownloadQueueManager.addToQueue(
+            DownloadObjects.DownloadQueueItem(
+                episode = episode,
+                isMovie = isMovie,
+                resultName = resultName,
+                resultType = resultType,
+                resultPoster = resultPoster,
+                apiName = apiName,
+                resultId = resultId,
+                resultUrl = resultUrl,
+                links = listOf(selectedLink),
+                subs = allLoadedSubs.toList().ifEmpty { null },
+            ).toWrapper()
+        )
+
+        CommonActivity.showToast(act, R.string.download_started, Toast.LENGTH_SHORT)
+        dismissAllowingStateLoss()
+    }
+
     override fun onDestroy() {
         super.onDestroy()
         scrapingJob?.cancel()
@@ -659,6 +726,7 @@ class StreamSourcesDialogFragment : DialogFragment() {
         pendingResponse = null
         pendingGenerator = null
         pendingSyncData = null
+        pendingIsDownloadOnly = false
     }
 }
 
@@ -684,7 +752,9 @@ class StreamSourceDiffCallback : DiffUtil.ItemCallback<StreamSourceItem>() {
 }
 
 class StreamSourcesAdapter(
-    private val onLinkClick: (ExtractorLink) -> Unit
+    private val isDownloadOnly: Boolean,
+    private val onLinkClick: (ExtractorLink) -> Unit,
+    private val onDownloadClick: (ExtractorLink) -> Unit
 ) : ListAdapter<StreamSourceItem, RecyclerView.ViewHolder>(StreamSourceDiffCallback()) {
 
     companion object {
@@ -706,7 +776,7 @@ class StreamSourcesAdapter(
             HeaderViewHolder(view)
         } else {
             val view = inflater.inflate(R.layout.item_stream_source_card, parent, false)
-            LinkViewHolder(view, onLinkClick)
+            LinkViewHolder(view, isDownloadOnly, onLinkClick, onDownloadClick)
         }
     }
 
@@ -730,11 +800,14 @@ class StreamSourcesAdapter(
 
     class LinkViewHolder(
         itemView: View,
-        private val onLinkClick: (ExtractorLink) -> Unit
+        private val isDownloadOnly: Boolean,
+        private val onLinkClick: (ExtractorLink) -> Unit,
+        private val onDownloadClick: (ExtractorLink) -> Unit
     ) : RecyclerView.ViewHolder(itemView) {
         private val title: TextView = itemView.findViewById(R.id.source_name)
         private val quality: TextView = itemView.findViewById(R.id.source_quality)
         private val badge: TextView = itemView.findViewById(R.id.source_badge)
+        private val downloadBtn: ImageView = itemView.findViewById(R.id.source_download_btn)
 
         fun bind(linkItem: StreamSourceItem.Link) {
             val link = linkItem.link
@@ -760,8 +833,22 @@ class StreamSourcesAdapter(
                 badge.isVisible = false
             }
 
-            itemView.setOnClickListener {
-                onLinkClick(link)
+            if (isDownloadOnly) {
+                downloadBtn.imageTintList = android.content.res.ColorStateList.valueOf(0xFFFFFFFF.toInt())
+                itemView.setOnClickListener {
+                    onDownloadClick(link)
+                }
+                downloadBtn.setOnClickListener {
+                    onDownloadClick(link)
+                }
+            } else {
+                downloadBtn.imageTintList = android.content.res.ColorStateList.valueOf(0xFFA5A5AA.toInt())
+                itemView.setOnClickListener {
+                    onLinkClick(link)
+                }
+                downloadBtn.setOnClickListener {
+                    onDownloadClick(link)
+                }
             }
         }
     }

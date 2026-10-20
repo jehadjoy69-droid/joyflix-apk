@@ -565,7 +565,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         binding?.apply {
             navRailView.isVisible = isNavVisible && isLandscape()
-            navView.isVisible = isNavVisible && !isLandscape()
+            navViewContainer.isVisible = isNavVisible && !isLandscape()
             navHostFragment.apply {
                 val marginPx = resources.getDimensionPixelSize(R.dimen.nav_rail_view_width)
                 layoutParams =
@@ -1342,8 +1342,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
 
         binding?.apply {
             fixSystemBarsPadding(
-                navView,
-                heightResId = R.dimen.nav_view_height,
+                navViewContainer,
                 padTop = false,
                 overlayCutout = false
             )
@@ -1714,11 +1713,12 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             .setPopUpTo(navController.graph.startDestination, false)
             .build()*/
 
-        val rippleColor = ColorStateList.valueOf(getResourceColor(R.attr.colorPrimary, 0.1f))
+        val rippleColor = ColorStateList.valueOf(getResourceColor(R.attr.colorPrimary, 0.12f))
+        val activeIndicatorColor = ColorStateList.valueOf(getResourceColor(R.attr.colorPrimary, 0.22f))
 
         binding?.navView?.apply {
             itemRippleColor = rippleColor
-            itemActiveIndicatorColor = rippleColor
+            itemActiveIndicatorColor = activeIndicatorColor
             setupWithNavController(navController)
             setOnItemSelectedListener { item ->
                 onNavDestinationSelected(

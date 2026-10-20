@@ -43,53 +43,104 @@ class CrossTmdbProvider : TmdbProvider() {
         return Regex("""[^a-zA-Z0-9]""").replace(name, "").lowercase()
     }
 
+    private fun getTokens(name: String): Set<String> {
+        val stopWords = setOf("the", "a", "an", "and", "of", "in", "to", "for", "with", "on", "at", "by", "from")
+        return name.lowercase()
+            .replace(Regex("""[^a-z0-9\s]"""), " ")
+            .split(Regex("""\s+"""))
+            .filter { it.isNotBlank() && it !in stopWords }
+            .toSet()
+    }
+
     private fun findMatchingItem(
         items: List<SearchResponse>,
-        cleanTitle: String,
+        rawTitle: String,
         releaseYear: Int?,
         isTv: Boolean,
         season: Int? = null
     ): SearchResponse? {
-        if (items.isEmpty()) return null
+        if (items.isEmpty() || rawTitle.isBlank()) return null
+
+        val cleanTitle = filterName(rawTitle)
+        val queryTokens = getTokens(rawTitle)
+        if (queryTokens.isEmpty() && cleanTitle.isBlank()) return null
+
         val cleanNoYear = if (releaseYear != null) cleanTitle.removeSuffix("$releaseYear") else cleanTitle
         val seasonRegex = Regex("""(?:\bseason|\bs)\s*(\d+)""", RegexOption.IGNORE_CASE)
 
         var bestMatch: SearchResponse? = null
-        var highestScore = -100
+        var highestScore = -1000
 
         for (item in items) {
-            val itemClean = filterName(item.name)
+            val itemRawName = item.name
+            val itemClean = filterName(itemRawName)
             if (itemClean.isBlank()) continue
+
+            // 1. Media Type Hard Filter: TV must not match Movie, Movie must not match TV
+            if (isTv) {
+                if (item.type == TvType.Movie || item.type == TvType.AnimeMovie) {
+                    continue
+                }
+            } else {
+                if (item.type == TvType.TvSeries || item.type == TvType.AsianDrama) {
+                    continue
+                }
+            }
+
+            // 2. Season Specific Hard Filter for TV shows
+            if (isTv && season != null) {
+                val matchSeason = seasonRegex.find(itemRawName)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                if (matchSeason != null && matchSeason != season) {
+                    // This item belongs to a completely different season (e.g. S1 or S4 when searching for S5)
+                    continue
+                }
+            }
+
             val itemYear = item.yearOrNull
             val itemCleanNoYear = if (itemYear != null) itemClean.removeSuffix("$itemYear") else itemClean
+            val itemTokens = getTokens(itemRawName)
 
-            var score = 0
+            // 3. Token Coverage Check: Query tokens must be present in item
+            val matchedTokensCount = if (queryTokens.isNotEmpty()) queryTokens.count { it in itemTokens } else 0
+            val tokenRatio = if (queryTokens.isNotEmpty()) matchedTokensCount.toFloat() / queryTokens.size.toFloat() else 1.0f
 
-            // 1. Title Similarity
             val isExact = itemClean == cleanTitle ||
                 itemCleanNoYear == cleanNoYear ||
                 itemClean == cleanNoYear ||
                 itemCleanNoYear == cleanTitle
 
+            if (!isExact) {
+                if (queryTokens.size > 1 && tokenRatio < 0.75f) {
+                    continue
+                }
+                if (queryTokens.size == 1 && matchedTokensCount == 0) {
+                    continue
+                }
+            }
+
+            var score = 0
+
+            // Title Similarity Scoring
             if (isExact) {
                 score = 100
-            } else if (cleanNoYear.isNotEmpty() && itemCleanNoYear.startsWith(cleanNoYear)) {
-                score = 85
-            } else if (itemCleanNoYear.isNotEmpty() && cleanNoYear.startsWith(itemCleanNoYear)) {
-                score = 80
-            } else if (cleanNoYear.isNotEmpty() && itemCleanNoYear.contains(cleanNoYear)) {
-                score = 70
-            } else if (itemCleanNoYear.isNotEmpty() && cleanNoYear.contains(itemCleanNoYear)) {
-                score = 65
             } else {
-                score = 25
+                score = (tokenRatio * 70).toInt()
+
+                // Extra tokens penalty (e.g. searching "Avatar", but item is "Avatar The Last Airbender")
+                val ignoredExtras = setOf("season", "s", "complete", "series", "movie", "hd", "4k", "dual", "audio", "hindi", "dub", "sub")
+                val extraTokens = (itemTokens - queryTokens).filter { token ->
+                    token !in ignoredExtras && token.toIntOrNull() == null
+                }
+                if (extraTokens.isNotEmpty() && queryTokens.size <= 2) {
+                    score -= (extraTokens.size * 15).coerceAtMost(45)
+                }
             }
 
             // Length difference penalty
             val lenDiff = kotlin.math.abs(itemCleanNoYear.length - cleanNoYear.length)
             score -= (lenDiff * 2).coerceAtMost(25)
 
-            // 2. Year Matching
+            // Year Matching
             if (releaseYear != null && itemYear != null) {
                 val diff = itemYear - releaseYear
                 if (diff == 0) {
@@ -97,14 +148,15 @@ class CrossTmdbProvider : TmdbProvider() {
                 } else if (kotlin.math.abs(diff) == 1) {
                     score += 10
                 } else if (isTv && (season ?: 1) > 1 && diff > 1) {
-                    // Later seasons naturally air in a later year (e.g. Stranger Things S5 in 2025 vs 2016)
+                    // Later TV seasons can air years after premiere
                     score += 15
-                } else if (kotlin.math.abs(diff) > 2) {
-                    score -= 20
+                } else {
+                    // Different year for movies is almost always a different movie or reboot!
+                    score -= if (!isTv) 80 else 40
                 }
             }
 
-            // 3. Media Type Preference (Bonus, never hard reject)
+            // Media Type Bonus
             if (isTv) {
                 if (item.type == TvType.TvSeries || item.type == TvType.AsianDrama || item.type == TvType.Cartoon) {
                     score += 15
@@ -115,16 +167,12 @@ class CrossTmdbProvider : TmdbProvider() {
                 }
             }
 
-            // 4. Season specific scoring
+            // Season Bonus
             if (isTv && season != null) {
-                val matchSeason = seasonRegex.find(item.name)?.groupValues?.getOrNull(1)?.toIntOrNull()
-                if (matchSeason != null) {
-                    if (matchSeason == season) {
-                        score += 35
-                    } else {
-                        score -= 60
-                    }
-                } else if (season == 1) {
+                val matchSeason = seasonRegex.find(itemRawName)?.groupValues?.getOrNull(1)?.toIntOrNull()
+                if (matchSeason == season) {
+                    score += 35
+                } else if (season == 1 && matchSeason == null) {
                     score += 10
                 }
             }
@@ -135,15 +183,11 @@ class CrossTmdbProvider : TmdbProvider() {
             }
         }
 
-        return if (highestScore >= 35) {
+        // Must meet strict threshold of 60. NEVER fall back to items.firstOrNull()!
+        return if (highestScore >= 60) {
             bestMatch
         } else {
-            items.firstOrNull { item ->
-                val itemClean = filterName(item.name)
-                itemClean == cleanTitle ||
-                    (cleanTitle.isNotEmpty() && itemClean.contains(cleanTitle)) ||
-                    (itemClean.isNotEmpty() && cleanTitle.contains(itemClean))
-            } ?: items.firstOrNull()
+            null
         }
     }
 
@@ -200,6 +244,24 @@ class CrossTmdbProvider : TmdbProvider() {
                 }
                 true
             }.map { it.name }
+        }
+
+        fun isValidLink(link: ExtractorLink): Boolean {
+            val urlLower = link.url.lowercase()
+            val nameLower = link.name.lowercase()
+            val sourceLower = link.source.lowercase()
+
+            if (link.url.isBlank()) return false
+            if (urlLower.contains("youtube.com") || urlLower.contains("youtu.be")) return false
+            if (nameLower.contains("trailer") || nameLower.contains("teaser") ||
+                nameLower.contains("sample") || nameLower.contains("promo") ||
+                nameLower.contains("preview")
+            ) return false
+            if (nameLower.contains("netflix") || sourceLower.contains("netflix") ||
+                nameLower.contains("netmirror") || sourceLower.contains("netmirror")
+            ) return false
+
+            return true
         }
     }
 
@@ -275,7 +337,9 @@ class CrossTmdbProvider : TmdbProvider() {
 
         embedUrls.amap { embedUrl ->
             try {
-                if (loadExtractor(embedUrl, subtitleCallback, callback)) {
+                if (loadExtractor(embedUrl, subtitleCallback) { link ->
+                    if (isValidLink(link)) callback(link)
+                }) {
                     return@amap
                 }
                 val response = app.get(
@@ -294,7 +358,22 @@ class CrossTmdbProvider : TmdbProvider() {
                     for (iframeUrl in iframeUrls) {
                         try {
                             val resolvedUrl = if (iframeUrl.startsWith("//")) "https:$iframeUrl" else iframeUrl
-                            loadExtractor(resolvedUrl, embedUrl, subtitleCallback, callback)
+                            val resolvedLower = resolvedUrl.lowercase()
+                            if (resolvedLower.contains("youtube.com") ||
+                                resolvedLower.contains("youtu.be") ||
+                                resolvedLower.contains("trailer") ||
+                                resolvedLower.contains("promo") ||
+                                resolvedLower.contains("preview") ||
+                                resolvedLower.contains("adserver") ||
+                                resolvedLower.contains("popunder")
+                            ) {
+                                continue
+                            }
+                            loadExtractor(resolvedUrl, embedUrl, subtitleCallback) { link ->
+                                if (isValidLink(link)) {
+                                    callback(link)
+                                }
+                            }
                         } catch (e: Exception) {
                             logError(e)
                         }
@@ -465,7 +544,7 @@ class CrossTmdbProvider : TmdbProvider() {
                             try {
                                 val res = api.search(q)
                                 if (!res.isNullOrEmpty()) {
-                                    val match = findMatchingItem(res, cleanTitle, releaseYear, isTv, season)
+                                    val match = findMatchingItem(res, title, releaseYear, isTv, season)
                                     if (match != null) {
                                         val matchLoaded = api.load(match.url)
                                         if (matchLoaded != null) {
@@ -480,10 +559,11 @@ class CrossTmdbProvider : TmdbProvider() {
                                                 if (hasSeason) {
                                                     loaded = matchLoaded
                                                     break
-                                                } else if (loaded == null) {
-                                                    loaded = matchLoaded
                                                 }
-                                            } else {
+                                            } else if (!isTv && matchLoaded is MovieLoadResponse) {
+                                                loaded = matchLoaded
+                                                break
+                                            } else if (isTv && season <= 1 && matchLoaded is TvSeriesLoadResponse) {
                                                 loaded = matchLoaded
                                                 break
                                             }
@@ -519,21 +599,11 @@ class CrossTmdbProvider : TmdbProvider() {
                                             (ep.season == 1 || ep.season == null || ep.season == 0) && ep.episode == episode
                                         } ?: (if (episode > 0) loaded.episodes.getOrNull(episode - 1) else null)
                                     } else {
-                                        // For season > 1, check if this show has any episodes tagged with this season
                                         val seasonEps = loaded.episodes.filter { it.season == season }
                                         if (seasonEps.isNotEmpty()) {
                                             seasonEps.firstOrNull { it.episode == episode }
                                         } else {
-                                            val hasAnyNumberedSeasons = loaded.episodes.any { (it.season ?: 0) > 1 } ||
-                                                loaded.episodes.any { it.season == 1 }
-                                            if (!hasAnyNumberedSeasons) {
-                                                // Flat episode list with no season numbers at all
-                                                loaded.episodes.firstOrNull { it.episode == episode }
-                                            } else {
-                                                // Scraper has other seasons (e.g. S1-S4) but NOT season 5!
-                                                // Must return null so we don't wrongly play Season 1 Episode 5!
-                                                null
-                                            }
+                                            null
                                         }
                                     }
 
@@ -546,15 +616,13 @@ class CrossTmdbProvider : TmdbProvider() {
                                 is MovieLoadResponse -> {
                                     loaded.dataUrl.ifBlank { null } ?: loaded.url
                                 }
-                                is TvSeriesLoadResponse -> {
-                                    loaded.episodes.firstOrNull()?.data ?: loaded.url
-                                }
-                                else -> loaded.url
+                                else -> null
                             }
                         }
 
                         if (!targetData.isNullOrBlank()) {
                             api.loadLinks(targetData, isCasting, subtitleCallback) { extLink ->
+                                if (!isValidLink(extLink)) return@loadLinks
                                 linksFromThisScraper++
                                 val streamName = if (extLink.name.contains(api.name, ignoreCase = true)) {
                                     extLink.name
@@ -599,6 +667,7 @@ class CrossTmdbProvider : TmdbProvider() {
                     episode = episode,
                     subtitleCallback = subtitleCallback,
                     callback = { extLink ->
+                        if (!isValidLink(extLink)) return@loadUniversalEmbeds
                         embedCount++
                         wrappedCallback(
                             ExtractorLink(

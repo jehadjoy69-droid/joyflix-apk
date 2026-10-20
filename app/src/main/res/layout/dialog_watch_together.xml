@@ -3,7 +3,7 @@
     xmlns:app="http://schemas.android.com/apk/res-auto"
     xmlns:tools="http://schemas.android.com/tools"
     android:layout_width="match_parent"
-    android:layout_height="wrap_content"
+    android:layout_height="match_parent"
     android:fillViewport="true"
     android:overScrollMode="ifContentScrolls"
     android:scrollbars="vertical">
@@ -42,6 +42,7 @@
                 <TextView
                     android:layout_width="wrap_content"
                     android:layout_height="wrap_content"
+                    android:fontFamily="@font/netflix_sans"
                     android:text="@string/watch_together"
                     android:textColor="?attr/textColor"
                     android:textSize="20sp"
@@ -52,6 +53,7 @@
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
                 android:layout_marginTop="4dp"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/watch_together_desc"
                 android:textColor="?attr/grayTextColor"
                 android:textSize="13sp" />
@@ -63,11 +65,11 @@
             android:layout_height="32dp"
             android:layout_alignParentEnd="true"
             android:layout_centerVertical="true"
-            android:background="?attr/selectableItemBackgroundBorderless"
+            android:background="@drawable/dex_circle_button_bg"
             android:clickable="true"
             android:contentDescription="@string/go_back_img_des"
             android:focusable="true"
-            android:padding="4dp"
+            android:padding="6dp"
             android:src="@drawable/ic_baseline_close_24"
             app:tint="?attr/grayTextColor" />
     </RelativeLayout>
@@ -113,6 +115,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/your_nickname"
                 android:textColor="?attr/textColor"
                 android:textSize="13sp"
@@ -124,6 +127,7 @@
                 android:layout_height="42dp"
                 android:layout_marginTop="8dp"
                 android:background="@drawable/search_background"
+                android:fontFamily="@font/netflix_sans"
                 android:hint="@string/nickname_hint"
                 android:inputType="textPersonName"
                 android:maxLength="20"
@@ -145,6 +149,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/create_room"
                 android:textColor="?attr/textColor"
                 android:textSize="15sp"
@@ -155,6 +160,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:layout_marginBottom="12dp"
+                android:fontFamily="@font/netflix_sans"
                 android:text="Start a new Watch Party and invite friends with a code."
                 android:textColor="?attr/grayTextColor"
                 android:textSize="12sp" />
@@ -163,8 +169,10 @@
                 android:id="@+id/btn_create_room"
                 style="@style/WhiteButton"
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
+                android:layout_height="46dp"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/create_room"
+                app:cornerRadius="24dp"
                 app:icon="@drawable/ic_baseline_people_24"
                 app:iconGravity="textStart" />
         </LinearLayout>
@@ -210,6 +218,7 @@
             <TextView
                 android:layout_width="wrap_content"
                 android:layout_height="wrap_content"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/join_room"
                 android:textColor="?attr/textColor"
                 android:textSize="15sp"
@@ -220,6 +229,7 @@
                 android:layout_height="wrap_content"
                 android:layout_marginTop="2dp"
                 android:layout_marginBottom="12dp"
+                android:fontFamily="@font/netflix_sans"
                 android:text="Enter code shared by your friend to sync playback."
                 android:textColor="?attr/grayTextColor"
                 android:textSize="12sp" />
@@ -230,6 +240,7 @@
                 android:layout_height="44dp"
                 android:layout_marginBottom="12dp"
                 android:background="@drawable/search_background"
+                android:fontFamily="@font/netflix_sans"
                 android:gravity="center"
                 android:hint="@string/enter_room_code"
                 android:inputType="textCapCharacters"
@@ -245,8 +256,10 @@
                 android:id="@+id/btn_join_room"
                 style="@style/WhiteButton"
                 android:layout_width="match_parent"
-                android:layout_height="44dp"
+                android:layout_height="46dp"
+                android:fontFamily="@font/netflix_sans"
                 android:text="@string/join_room"
+                app:cornerRadius="24dp"
                 app:icon="@drawable/ic_baseline_play_arrow_24"
                 app:iconGravity="textStart" />
         </LinearLayout>
@@ -308,8 +321,10 @@
                 android:layout_width="wrap_content"
                 android:layout_height="40dp"
                 android:layout_marginTop="14dp"
+                android:fontFamily="@font/netflix_sans"
                 android:paddingHorizontal="20dp"
                 android:text="@string/copy_code"
+                app:cornerRadius="20dp"
                 app:icon="@drawable/copy_all_24px"
                 app:iconGravity="textStart" />
         </LinearLayout>
@@ -438,9 +453,11 @@
             android:id="@+id/btn_host_start_play"
             style="@style/WhiteButton"
             android:layout_width="match_parent"
-            android:layout_height="46dp"
+            android:layout_height="48dp"
             android:layout_marginTop="12dp"
+            android:fontFamily="@font/netflix_sans"
             android:text="@string/host_start_watching"
+            app:cornerRadius="24dp"
             app:icon="@drawable/ic_baseline_play_arrow_24"
             app:iconGravity="textStart"
             android:visibility="gone"
@@ -451,6 +468,7 @@
             android:layout_height="wrap_content"
             android:layout_marginVertical="12dp"
             android:gravity="center"
+            android:fontFamily="@font/netflix_sans"
             android:text="@string/watch_party_info"
             android:textColor="?attr/grayTextColor"
             android:textSize="12sp" />
@@ -459,9 +477,11 @@
             android:id="@+id/btn_leave_room"
             style="@style/BlackButton"
             android:layout_width="match_parent"
-            android:layout_height="44dp"
+            android:layout_height="46dp"
+            android:fontFamily="@font/netflix_sans"
             android:text="@string/leave_room"
             android:textColor="@color/colorAccentRed"
+            app:cornerRadius="24dp"
             app:icon="@drawable/ic_baseline_close_24"
             app:iconGravity="textStart"
             app:iconTint="@color/colorAccentRed"

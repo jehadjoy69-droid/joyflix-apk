@@ -133,10 +133,22 @@ class RepoLinkGenerator(
                 }
             },
             callback = { link ->
-                if (link.name.contains("netflix", ignoreCase = true) ||
-                    link.source.contains("netflix", ignoreCase = true) ||
-                    link.name.contains("netmirror", ignoreCase = true) ||
-                    link.source.contains("netmirror", ignoreCase = true) ||
+                val nameLower = link.name.lowercase()
+                val sourceLower = link.source.lowercase()
+                val urlLower = link.url.lowercase()
+
+                if (link.url.isBlank() ||
+                    nameLower.contains("netflix") ||
+                    sourceLower.contains("netflix") ||
+                    nameLower.contains("netmirror") ||
+                    sourceLower.contains("netmirror") ||
+                    urlLower.contains("youtube.com") ||
+                    urlLower.contains("youtu.be") ||
+                    nameLower.contains("trailer") ||
+                    nameLower.contains("teaser") ||
+                    nameLower.contains("sample") ||
+                    nameLower.contains("promo") ||
+                    nameLower.contains("preview") ||
                     com.lagradost.cloudstream3.utils.DeadLinkManager.isDead(link.url)) {
                     return@loadLinks
                 }
