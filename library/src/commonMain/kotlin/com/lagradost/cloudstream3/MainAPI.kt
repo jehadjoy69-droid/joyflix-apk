@@ -123,10 +123,25 @@ object NsfwHelper {
         "tsumino", "hitomi", "pururin", "multporn"
     )
 
+    private val UNWANTED_KEYWORDS = listOf(
+        "smarttube", "smart tube", "smart_tube", "smart-tube",
+        "watchparty", "watch party", "watch_party", "syncplay",
+        "netflix", "netmirror", "reelfren"
+    )
+
     private val ADULT_WORD_REGEX = Regex("(?i)(^|[^a-zA-Z0-9])(nsfw|18\\+|adult|hentai|jav|xxx|porn|erotic)([^a-zA-Z0-9]|$)")
 
     val isAdultEnabled: Boolean
         get() = MainAPI.settingsForProvider.enableAdult
+
+    fun isUnwanted(vararg values: String?): Boolean {
+        for (v in values) {
+            if (v.isNullOrBlank()) continue
+            val lower = v.lowercase()
+            if (UNWANTED_KEYWORDS.any { lower.contains(it) }) return true
+        }
+        return false
+    }
 
     fun isAdult(
         name: String?,
@@ -157,6 +172,8 @@ object NsfwHelper {
         supportedTypes: Set<TvType>? = null,
         tvTypes: List<String>? = null
     ): Boolean {
+        if (isUnwanted(name, url)) return true
+        if (tvTypes?.any { isUnwanted(it) } == true) return true
         if (isAdultEnabled) return false
         return isAdult(name, url, supportedTypes, tvTypes)
     }

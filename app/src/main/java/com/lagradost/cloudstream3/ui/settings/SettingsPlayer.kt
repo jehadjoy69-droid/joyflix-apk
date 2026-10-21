@@ -228,21 +228,15 @@ class SettingsPlayer : BasePreferenceFragmentCompat() {
         getPref(R.string.player_default_key)?.setOnPreferenceClickListener {
             // Pair each player with its display name, dropping any with none,
             // which would mean something is definitely wrong.
-            val players = VideoClickActionHolder.getPlayers(activity).mapNotNull { player ->
-                (player.name.asStringNull(activity) ?: player::class.simpleName)?.let { player to it }
-            }
+            val prefNames = listOf(
+                getString(R.string.episode_action_play_mirror), // Select stream source
+                getString(R.string.player_settings_play_in_app) // Auto play
+            )
 
-            val prefNames = buildList {
-                add(getString(R.string.episode_action_play_mirror)) // Select stream source
-                add(getString(R.string.player_settings_play_in_app)) // Auto play
-                addAll(players.filter { it.first.uniqueId() != "PlayMirrorAction" }.map { (_, name) -> name })
-            }
-
-            val prefValues = buildList {
-                add("") // "" defaults to PlayMirrorAction (Select stream source)
-                add("AutoPlay")
-                addAll(players.filter { it.first.uniqueId() != "PlayMirrorAction" }.map { (player, _) -> player.uniqueId() })
-            }
+            val prefValues = listOf(
+                "", // "" defaults to PlayMirrorAction (Select stream source)
+                "AutoPlay"
+            )
 
             val current = settingsManager.getString(getString(R.string.player_default_key), "") ?: ""
             activity?.showBottomDialog(

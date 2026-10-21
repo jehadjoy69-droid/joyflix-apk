@@ -1,7 +1,9 @@
 package com.lagradost.cloudstream3.ui.settings
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -15,9 +17,12 @@ import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
 import androidx.compose.ui.tooling.preview.PreviewLightDark
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.AllLanguagesName
 import com.lagradost.cloudstream3.CloudStreamApp
+import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.CommonActivity.activity
 import com.lagradost.cloudstream3.CommonActivity.showToast
 import com.lagradost.cloudstream3.R
@@ -32,6 +37,7 @@ import com.lagradost.cloudstream3.utils.BatteryOptimizationChecker.isAppRestrict
 import com.lagradost.cloudstream3.utils.BatteryOptimizationChecker.showRequestIgnoreBatteryOptDialog
 import com.lagradost.cloudstream3.utils.SubtitleHelper.fromTagToLanguageName
 import com.lagradost.cloudstream3.utils.SubtitleHelper.getNameNextToFlagEmoji
+import com.lagradost.cloudstream3.utils.downloader.DownloadFileManagement
 import com.lagradost.cloudstream4.AppSettings
 import com.lagradost.cloudstream4.compose.ActionDialog
 import com.lagradost.cloudstream4.compose.PHONE
@@ -74,6 +80,10 @@ object SettingsGeneralScreen : SearchableSettings {
                     // store the actual URI instead of the path due to permissions.
                     // filePath should only be used for cosmetic purposes.
                     val visual = filePath ?: uri.toString()
+                    PreferenceManager.getDefaultSharedPreferences(context).edit {
+                        putString(context.getString(R.string.download_path_key), uri.toString())
+                        putString(context.getString(R.string.download_path_key_visual), visual)
+                    }
                     settings.general.downloadPath.set(uri.toString())
                     settings.general.downloadPathVisual.set(visual)
                 } catch (t: Throwable) {
@@ -81,11 +91,13 @@ object SettingsGeneralScreen : SearchableSettings {
                 }
             }
 
+        val context = LocalContext.current
+        val currentActivity = LocalActivity.current ?: (context as? Activity) ?: activity
+        val defaultDownloadVisual = remember(context) { DownloadFileManagement.getDefaultDir(context)?.filePath() ?: "" }
         val downloadPathVisual by settings.general.downloadPathVisual.collectAsState()
-        //val downloadPath by settings.general.downloadPath.collectAsState()
+        val displayDownloadPath = downloadPathVisual.ifBlank { defaultDownloadVisual }
 
         var isBatteryShown by remember { mutableStateOf(false) }
-        val context = LocalContext.current
 
         if (isBatteryShown) {
             ActionDialog(
@@ -120,9 +132,15 @@ object SettingsGeneralScreen : SearchableSettings {
                     title = stringResource(R.string.app_language),
                     icon = painterResource(R.drawable.language_korean_latin_24px),
                     onValueChanged = { value ->
+                        val act = currentActivity ?: (context as? Activity) ?: activity
+                        CommonActivity.setLocale(context, value)
+                        act?.let { CommonActivity.setLocale(it, value) }
+                        PreferenceManager.getDefaultSharedPreferences(context).edit(commit = true) {
+                            putString(context.getString(R.string.locale_key), value)
+                        }
                         settings.general.locale.set(value)
-                        activity?.recreate()
-                        return@ListPreference false
+                        act?.recreate()
+                        return@ListPreference true
                     },
                     subtitleProvider = { v, e -> e[v] ?: getCurrentLocale(LocalContext.current) }
                 ),
@@ -159,7 +177,7 @@ object SettingsGeneralScreen : SearchableSettings {
                 preferenceItems = persistentListOf(
                     Preference.PreferenceItem.TextPreference(
                         icon = painterResource(R.drawable.netflix_download),
-                        subtitle = downloadPathVisual,
+                        subtitle = displayDownloadPath,
                         title = stringResource(R.string.download_path_pref),
                         onClick = {
                             // This is not a ListPreference because the old selection system is
@@ -221,8 +239,11 @@ object SettingsGeneralScreen : SearchableSettings {
                         entries = integerArrayResource(R.array.dns_pref_values).zip(
                             stringArrayResource(R.array.dns_pref)
                         ).toMap(),
-                        onValueChanged = {
-                            (CloudStreamApp.context)?.let { ctx ->
+                        onValueChanged = { newDns ->
+                            (CloudStreamApp.context ?: context).let { ctx ->
+                                PreferenceManager.getDefaultSharedPreferences(ctx).edit {
+                                    putInt(ctx.getString(R.string.dns_key), newDns)
+                                }
                                 app.initClient(ctx, ignoreSSL = false)
                                 @OptIn(UnsafeSSL::class)
                                 insecureApp.initClient(ctx, ignoreSSL = true)

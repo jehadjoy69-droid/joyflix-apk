@@ -1,6 +1,8 @@
 package com.lagradost.cloudstream3.ui.settings
 
+import android.app.Activity
 import android.text.format.Formatter.formatShortFileSize
+import androidx.activity.compose.LocalActivity
 import androidx.compose.runtime.Composable
 import androidx.compose.runtime.LaunchedEffect
 import androidx.compose.runtime.getValue
@@ -42,18 +44,14 @@ object SettingsPlayerScreen : SearchableSettings {
         val settings = rememberAppSettings()
 
         val context = LocalContext.current
+        val currentActivity = LocalActivity.current ?: (context as? Activity) ?: activity
         val selectSourceName = stringResource(R.string.episode_action_play_mirror)
         val autoPlayName = stringResource(R.string.player_settings_play_in_app)
         val players = remember(context) {
             mapOf(
                 "" to selectSourceName,
                 "AutoPlay" to autoPlayName,
-            ) + VideoClickActionHolder.getPlayers()
-                .filter { it.uniqueId() != "PlayMirrorAction" }
-                .associate { player ->
-                    player.uniqueId() to (player.name.asStringNull(context)
-                        ?: player::class.simpleName ?: player::class.jvmName)
-                }
+            )
         }
 
         var cacheSize by remember { mutableLongStateOf(0L) }
@@ -74,14 +72,16 @@ object SettingsPlayerScreen : SearchableSettings {
                         subtitle = stringResource(R.string.player_subtitles_settings_des),
                         icon = painterResource(R.drawable.subtitles_gear_24px),
                         onClick = {
-                            SubtitlesFragment.push(activity, false)
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            SubtitlesFragment.push(act, false)
                         }),
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(R.string.chromecast_subtitles_settings),
                         subtitle = stringResource(R.string.chromecast_subtitles_settings_des),
                         icon = painterResource(R.drawable.cast),
                         onClick = {
-                            ChromecastSubtitlesFragment.push(activity, false)
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            ChromecastSubtitlesFragment.push(act, false)
                         }),
                 ),
             ),
@@ -102,10 +102,10 @@ object SettingsPlayerScreen : SearchableSettings {
                         onClick = {
                             ioSafe {
                                 val defaultSources = QualityProfileDialog.getAllDefaultSources()
-                                val activity = activity ?: return@ioSafe
-                                activity.runOnUiThread {
+                                val act = currentActivity ?: (context as? Activity) ?: activity ?: return@ioSafe
+                                act.runOnUiThread {
                                     QualityProfileDialog(
-                                        activity,
+                                        act,
                                         R.style.DialogFullscreenPlayer,
                                         defaultSources,
                                     ).show()

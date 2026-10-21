@@ -57,17 +57,17 @@ object SettingsAccountScreen : SearchableSettings, BiometricAuthenticator.Biomet
     }
 
     override fun onAuthenticationError() {
-        val context = activity ?: return
+        val context = activity ?: com.lagradost.cloudstream3.CloudStreamApp.context ?: return
         updateAuthPreference(context, !isAuthEnabled(context))
     }
 
     override fun onAuthenticationSuccess() {
-        val context = activity ?: return
+        val context = activity ?: com.lagradost.cloudstream3.CloudStreamApp.context ?: return
 
         if (isAuthEnabled(context)) {
             updateAuthPreference(context, true)
             BackupUtils.backup(context)
-            context.showBottomDialogText(
+            (activity ?: context as? android.app.Activity)?.showBottomDialogText(
                 context.getString(R.string.biometric_setting),
                 context.getString(R.string.biometric_warning).html()
             ) { onDialogDismissedEvent }
@@ -131,12 +131,11 @@ object SettingsAccountScreen : SearchableSettings, BiometricAuthenticator.Biomet
 
                             if (deviceHasPasswordPinLock(activity)) {
                                 startBiometricAuthentication(
-                                    activity, R.string.biometric_authentication_title, false
+                                    activity,
+                                    R.string.biometric_authentication_title,
+                                    false,
+                                    this
                                 )
-                                promptInfo?.let {
-                                    authCallback = this
-                                    biometricPrompt?.authenticate(it)
-                                }
                             }
 
                             return@SwitchPreference true

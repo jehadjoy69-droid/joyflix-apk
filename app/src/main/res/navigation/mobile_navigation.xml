@@ -569,6 +569,22 @@
         app:popExitAnim="@anim/exit_anim"
         tools:layout="@layout/fragment_player" />
 
+    <action
+        android:id="@+id/action_navigation_global_to_navigation_test_providers"
+        app:destination="@id/navigation_test_providers"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim" />
+
+    <action
+        android:id="@+id/action_navigation_global_to_navigation_setup_language"
+        app:destination="@id/navigation_setup_language"
+        app:enterAnim="@anim/enter_anim"
+        app:exitAnim="@anim/exit_anim"
+        app:popEnterAnim="@anim/enter_anim"
+        app:popExitAnim="@anim/exit_anim" />
+
     <fragment
         android:id="@+id/navigation_test_providers"
         android:name="com.lagradost.cloudstream3.ui.settings.testing.TestFragment"
@@ -577,15 +593,7 @@
         app:exitAnim="@anim/exit_anim"
         app:popEnterAnim="@anim/enter_anim"
         app:popExitAnim="@anim/exit_anim"
-        tools:layout="@layout/fragment_testing">
-        <action
-            android:id="@+id/action_navigation_global_to_navigation_test_providers"
-            app:destination="@id/navigation_test_providers"
-            app:enterAnim="@anim/enter_anim"
-            app:exitAnim="@anim/exit_anim"
-            app:popEnterAnim="@anim/enter_anim"
-            app:popExitAnim="@anim/exit_anim" />
-    </fragment>
+        tools:layout="@layout/fragment_testing" />
 
     <fragment
         android:id="@+id/navigation_setup_language"

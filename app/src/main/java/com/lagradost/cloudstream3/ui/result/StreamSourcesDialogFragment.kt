@@ -24,6 +24,7 @@ import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.APIHolder
 import com.lagradost.cloudstream3.APIHolder.unixTime
 import com.lagradost.cloudstream3.LoadResponse
+import com.lagradost.cloudstream3.LoadResponse.Companion.getTMDbId
 import com.lagradost.cloudstream3.LoadResponse.Companion.isMovie
 import com.lagradost.cloudstream3.MovieLoadResponse
 import com.lagradost.cloudstream3.R
@@ -613,7 +614,18 @@ class StreamSourcesDialogFragment : DialogFragment() {
         val episode = currentEpisode ?: return
         val generator = currentGenerator ?: RepoLinkGenerator(listOf(episode), page = currentResponse)
 
-        saveCurrentCache()
+        val tmdbId = currentResponse?.getTMDbId()?.toIntOrNull()
+            ?: episode.data.let { d ->
+                Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+            }
+        val mediaTitle = currentResponse?.name ?: episode.headerName ?: episode.name
+        com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.savePreferredSource(
+            title = mediaTitle,
+            id = tmdbId,
+            scraper = selectedLink.source,
+            serverName = selectedLink.name
+        )
 
         // 1. Populate RepoLinkGenerator.cache with selected link first!
         synchronized(RepoLinkGenerator.cache) {

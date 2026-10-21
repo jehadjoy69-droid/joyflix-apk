@@ -256,6 +256,19 @@ actual class WebViewResolver actual constructor(
                     ) {
                         handler?.proceed() // Ignore ssl issues
                     }
+
+                    override fun onReceivedHttpError(
+                        view: WebView?,
+                        request: WebResourceRequest?,
+                        errorResponse: WebResourceResponse?
+                    ) {
+                        super.onReceivedHttpError(view, request, errorResponse)
+                        val code = errorResponse?.statusCode ?: return
+                        if (code in listOf(500, 502, 503, 504) && request?.isForMainFrame == true) {
+                            Log.w(TAG, "Host error $code encountered in WebView, aborting bypass...")
+                            destroyWebView()
+                        }
+                    }
                 }
                 webView?.loadUrl(url, headers.toMap())
             } catch (e: Exception) {

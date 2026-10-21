@@ -652,6 +652,49 @@ class HomeParentItemAdapterPreview(
             }
 
             (binding as? FragmentHomeHeadBinding)?.apply {
+                homeSearch.setIconifiedByDefault(false)
+                homeSearch.isIconified = false
+
+                val searchSrcText = homeSearch.findViewById<SearchView.SearchAutoComplete>(androidx.appcompat.R.id.search_src_text)
+                searchSrcText?.apply {
+                    setTextColor(ContextCompat.getColor(context, R.color.white))
+                    setHintTextColor(ContextCompat.getColor(context, R.color.dex_text_muted))
+                    textSize = 14f
+                    hint = context.getString(R.string.search_hint)
+                    isFocusable = false
+                    isClickable = true
+                    setOnClickListener {
+                        viewModel.queryTextSubmit("")
+                    }
+                }
+
+                val searchPlate = homeSearch.findViewById<View>(androidx.appcompat.R.id.search_plate)
+                searchPlate?.apply {
+                    setBackgroundColor(android.graphics.Color.TRANSPARENT)
+                    isClickable = true
+                    setOnClickListener {
+                        viewModel.queryTextSubmit("")
+                    }
+                }
+
+                val searchCloseButton = homeSearch.findViewById<ImageView>(androidx.appcompat.R.id.search_close_btn)
+                searchCloseButton?.setColorFilter(ContextCompat.getColor(homeSearch.context, R.color.white))
+
+                val searchMagIcon = homeSearch.findViewById<ImageView>(androidx.appcompat.R.id.search_mag_icon)
+                searchMagIcon?.apply {
+                    setColorFilter(ContextCompat.getColor(homeSearch.context, R.color.dex_text_muted))
+                    isClickable = true
+                    setOnClickListener {
+                        viewModel.queryTextSubmit("")
+                    }
+                }
+
+                homeSearch.isFocusable = false
+                homeSearch.isClickable = true
+                homeSearch.setOnClickListener {
+                    viewModel.queryTextSubmit("")
+                }
+
                 homeSearch.setOnQueryTextListener(object : SearchView.OnQueryTextListener {
                     override fun onQueryTextSubmit(query: String): Boolean {
                         viewModel.queryTextSubmit(query)
@@ -659,7 +702,6 @@ class HomeParentItemAdapterPreview(
                     }
 
                     override fun onQueryTextChange(newText: String): Boolean {
-                        viewModel.queryTextChange(newText)
                         return true
                     }
                 })

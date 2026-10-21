@@ -149,6 +149,7 @@
     <string name="player_size_settings_des">Remove the black borders</string>
     <string name="player_subtitles_settings">Subtitles</string>
     <string name="player_subtitles_settings_des">Player subtitles settings</string>
+    <string name="external_player">External Player</string>
     <string name="chromecast_subtitles_settings">Chromecast Subtitles</string>
     <string name="chromecast_subtitles_settings_des">Chromecast subtitles settings</string>
     <string name="eigengraumode_settings">Playback speed</string>

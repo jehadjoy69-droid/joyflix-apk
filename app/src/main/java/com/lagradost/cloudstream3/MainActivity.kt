@@ -564,14 +564,15 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }*/
 
         binding?.apply {
-            navRailView.isVisible = isNavVisible && isLandscape()
-            navViewContainer.isVisible = isNavVisible && !isLandscape()
+            val isTv = isLayout(TV or EMULATOR)
+            navRailView.isVisible = isNavVisible && (isLandscape() || isTv)
+            navViewContainer.isVisible = isNavVisible && !isLandscape() && !isTv
             navHostFragment.apply {
                 val marginPx = resources.getDimensionPixelSize(R.dimen.nav_rail_view_width)
                 layoutParams =
                     (navHostFragment.layoutParams as ViewGroup.MarginLayoutParams).apply {
                         marginStart =
-                            if (isNavVisible && isLandscape() && isLayout(TV or EMULATOR)) marginPx else 0
+                            if (isNavVisible && (isLandscape() || isTv) && isTv) marginPx else 0
                     }
             }
 
@@ -1224,6 +1225,9 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         try {
             AccountManager.initMainAPI()
             registerBuiltinProviders()
+            com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider.preferredScraperProvider = { title, tmdbId ->
+                com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredScraper(title, tmdbId)
+            }
         } catch (_: Throwable) {
         }
 
@@ -1341,11 +1345,13 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         }
 
         binding?.apply {
-            fixSystemBarsPadding(
-                navViewContainer,
-                padTop = false,
-                overlayCutout = false
-            )
+            if (!isLayout(TV or EMULATOR)) {
+                fixSystemBarsPadding(
+                    navViewContainer,
+                    padTop = false,
+                    overlayCutout = false
+                )
+            }
 
             fixSystemBarsPadding(
                 navRailView,
@@ -1693,6 +1699,7 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 bundle?.apply {
                     this.putString(SearchFragment.SEARCH_QUERY, nextSearchQuery)
                 }
+                nextSearchQuery = null
             }
 
             if (navDestination.matchDestination(R.id.navigation_home)) {

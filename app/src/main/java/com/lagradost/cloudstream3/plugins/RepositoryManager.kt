@@ -104,22 +104,7 @@ object RepositoryManager {
         url = DEFAULT_REPOSITORY_URL
     )
 
-    val PREBUILT_REPOSITORIES: Array<RepositoryData> by lazy {
-        val custom = getKey<Array<RepositoryData>>("PREBUILT_REPOSITORIES")
-        if (!custom.isNullOrEmpty()) {
-            custom.map { repo ->
-                if (repo.url.contains("jehadjoy15-stack/joyflix-cloud/main/repo.json") ||
-                    (repo.url.contains("joyflix-cloud") && repo.url.contains("repo.json")) ||
-                    repo.url == "https://joyflix-api.jehadjoy69.workers.dev/") {
-                    repo.copy(url = DEFAULT_REPOSITORY_URL)
-                } else {
-                    repo
-                }
-            }.toTypedArray()
-        } else {
-            arrayOf(DEFAULT_REPOSITORY)
-        }
-    }
+    val PREBUILT_REPOSITORIES: Array<RepositoryData> = arrayOf(DEFAULT_REPOSITORY)
     private val GH_REGEX =
         Regex("^https://raw.githubusercontent.com/([A-Za-z0-9-]+)/([A-Za-z0-9_.-]+)/(.*)$")
 
@@ -199,10 +184,15 @@ object RepositoryManager {
                 return directPlugins.filterNot {
                     it.name.contains("netflix", ignoreCase = true) ||
                     it.name.contains("netmirror", ignoreCase = true) ||
+                    it.name.contains("smarttube", ignoreCase = true) ||
+                    it.name.contains("smart tube", ignoreCase = true) ||
                     it.internalName.contains("netflix", ignoreCase = true) ||
                     it.internalName.contains("netmirror", ignoreCase = true) ||
+                    it.internalName.contains("smarttube", ignoreCase = true) ||
+                    it.internalName.contains("smart tube", ignoreCase = true) ||
                     it.url.contains("netmirror", ignoreCase = true) ||
                     it.url.contains("netflix", ignoreCase = true) ||
+                    it.url.contains("smarttube", ignoreCase = true) ||
                     NsfwHelper.isBlocked(it.name, it.url, null, it.tvTypes) ||
                     NsfwHelper.isBlocked(it.internalName, it.url, null, it.tvTypes)
                 }
@@ -216,16 +206,22 @@ object RepositoryManager {
                 return subRepo.pluginLists.filterNot {
                     it.contains("netmirror", ignoreCase = true) ||
                     it.contains("netflix", ignoreCase = true) ||
+                    it.contains("smarttube", ignoreCase = true) ||
                     NsfwHelper.isBlocked(it, it)
                 }.amap { subUrl ->
                     parsePlugins(subUrl)
                 }.flatten().filterNot {
                     it.name.contains("netflix", ignoreCase = true) ||
                     it.name.contains("netmirror", ignoreCase = true) ||
+                    it.name.contains("smarttube", ignoreCase = true) ||
+                    it.name.contains("smart tube", ignoreCase = true) ||
                     it.internalName.contains("netflix", ignoreCase = true) ||
                     it.internalName.contains("netmirror", ignoreCase = true) ||
+                    it.internalName.contains("smarttube", ignoreCase = true) ||
+                    it.internalName.contains("smart tube", ignoreCase = true) ||
                     it.url.contains("netmirror", ignoreCase = true) ||
                     it.url.contains("netflix", ignoreCase = true) ||
+                    it.url.contains("smarttube", ignoreCase = true) ||
                     NsfwHelper.isBlocked(it.name, it.url, null, it.tvTypes) ||
                     NsfwHelper.isBlocked(it.internalName, it.url, null, it.tvTypes)
                 }
@@ -252,6 +248,7 @@ object RepositoryManager {
             val list = repo.pluginLists.filterNot {
                 it.contains("netmirror", ignoreCase = true) ||
                 it.contains("netflix", ignoreCase = true) ||
+                it.contains("smarttube", ignoreCase = true) ||
                 NsfwHelper.isBlocked(it, it)
             }.amap { url ->
                 parsePlugins(url).map {
@@ -260,10 +257,15 @@ object RepositoryManager {
             }.flatten().filterNot {
                 it.plugin.name.contains("netflix", ignoreCase = true) ||
                 it.plugin.name.contains("netmirror", ignoreCase = true) ||
+                it.plugin.name.contains("smarttube", ignoreCase = true) ||
+                it.plugin.name.contains("smart tube", ignoreCase = true) ||
                 it.plugin.internalName.contains("netflix", ignoreCase = true) ||
                 it.plugin.internalName.contains("netmirror", ignoreCase = true) ||
+                it.plugin.internalName.contains("smarttube", ignoreCase = true) ||
+                it.plugin.internalName.contains("smart tube", ignoreCase = true) ||
                 it.plugin.url.contains("netmirror", ignoreCase = true) ||
                 it.plugin.url.contains("netflix", ignoreCase = true) ||
+                it.plugin.url.contains("smarttube", ignoreCase = true) ||
                 NsfwHelper.isBlocked(it.plugin.name, it.plugin.url, null, it.plugin.tvTypes) ||
                 NsfwHelper.isBlocked(it.plugin.internalName, it.plugin.url, null, it.plugin.tvTypes)
             }
@@ -340,18 +342,15 @@ object RepositoryManager {
 
     fun getRepositories(): Array<RepositoryData> {
         val repos = getKey<Array<RepositoryData>>(REPOSITORIES_KEY)
-        return if (repos.isNullOrEmpty()) {
-            arrayOf(DEFAULT_REPOSITORY)
-        } else {
-            val updated = repos.map { repo ->
-                if (repo.url.contains("jehadjoy15-stack/joyflix-cloud/main/repo.json") ||
-                    (repo.url.contains("joyflix-cloud") && repo.url.contains("repo.json")) ||
-                    repo.url == "https://joyflix-api.jehadjoy69.workers.dev/") {
-                    repo.copy(url = DEFAULT_REPOSITORY_URL)
-                } else repo
+        val valid = repos?.filter { it.url == DEFAULT_REPOSITORY_URL } ?: emptyList()
+        val result = if (valid.isEmpty()) arrayOf(DEFAULT_REPOSITORY) else valid.toTypedArray()
+        if (repos != null && (repos.size != result.size || repos.any { it.url != DEFAULT_REPOSITORY_URL })) {
+            try {
+                setKey(REPOSITORIES_KEY, result)
+            } catch (_: Throwable) {
             }
-            (updated + DEFAULT_REPOSITORY).distinctBy { it.url }.toTypedArray()
         }
+        return result
     }
 
     // Don't want to read before we write in another thread

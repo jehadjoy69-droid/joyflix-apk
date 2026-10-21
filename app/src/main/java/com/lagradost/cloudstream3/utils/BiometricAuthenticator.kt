@@ -160,16 +160,14 @@ object BiometricAuthenticator {
     }
 
     // function to start authentication in any fragment or activity
-    fun startBiometricAuthentication(activity: FragmentActivity, title: Int, setDeviceCred: Boolean) {
+    fun startBiometricAuthentication(activity: FragmentActivity, title: Int, setDeviceCred: Boolean, customCallback: BiometricCallback? = null) {
         initializeBiometrics(activity)
-        authCallback = activity as? BiometricCallback
+        authCallback = customCallback ?: (activity as? BiometricCallback)
         if (isBiometricHardWareAvailable()) {
-            authCallback = activity as? BiometricCallback
             authenticationDialog(activity, title, setDeviceCred)
             promptInfo?.let { biometricPrompt?.authenticate(it) }
         } else {
             if (deviceHasPasswordPinLock(activity)) {
-                authCallback = activity as? BiometricCallback
                 authenticationDialog(activity, R.string.password_pin_authentication_title, true)
                 promptInfo?.let { biometricPrompt?.authenticate(it) }
 

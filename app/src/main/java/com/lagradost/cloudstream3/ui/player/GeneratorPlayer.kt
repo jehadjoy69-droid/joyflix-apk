@@ -7,6 +7,7 @@ import android.app.PendingIntent
 import android.content.Context
 import android.content.Intent
 import android.content.res.ColorStateList
+import android.content.res.Configuration
 import android.graphics.Bitmap
 import android.graphics.Typeface
 import android.os.Build
@@ -548,6 +549,23 @@ class GeneratorPlayer : FullScreenPlayer() {
         // uiReset() // Removed due to UX
 
         currentSelectedLink = link
+        safe {
+            val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
+            val tmdbId = load?.getTMDbId()?.toIntOrNull()
+                ?: (currentMeta as? ResultEpisode)?.data?.let { d ->
+                    Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                        ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                }
+            val mediaTitle = getCurrentMediaTitle() ?: load?.name ?: (currentMeta as? ResultEpisode)?.headerName ?: (currentMeta as? ResultEpisode)?.name
+            val scraperName = link.first?.source
+            val serverName = link.first?.name ?: link.second?.name
+            com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.savePreferredSource(
+                title = mediaTitle,
+                id = tmdbId,
+                scraper = scraperName,
+                serverName = serverName
+            )
+        }
         //  setEpisodes(viewModel.getAllMeta() ?: emptyList())
         setPlayerDimen(null)
         setTitle()
@@ -1075,6 +1093,14 @@ class GeneratorPlayer : FullScreenPlayer() {
             return
         }
 
+        showSourcesAndSubtitlesDialogue(showSources = true, showSubtitles = false)
+    }
+
+    override fun showSubtitlesDialogue() {
+        showSourcesAndSubtitlesDialogue(showSources = false, showSubtitles = true)
+    }
+
+    fun showSourcesAndSubtitlesDialogue(showSources: Boolean = true, showSubtitles: Boolean = true) {
         try {
             currentSelectedSubtitles = player.getCurrentPreferredSubtitle()
             //println("CURRENT SELECTED :$currentSelectedSubtitles of $currentSubs")
@@ -1096,6 +1122,44 @@ class GeneratorPlayer : FullScreenPlayer() {
                 val subtitleList = binding.sortSubtitles
                 val subtitleOptionList = binding.sortSubtitlesOptions
 
+                val isPortrait =
+                    ctx.resources.configuration.orientation == Configuration.ORIENTATION_PORTRAIT
+
+                if (!showSources) {
+                    binding.sortSourcesHolder.isGone = true
+                    if (isPortrait) {
+                        (binding.sortSubtitlesHolder.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                            lp.weight = 1f
+                            lp.height = 0
+                            binding.sortSubtitlesHolder.layoutParams = lp
+                        }
+                    } else {
+                        (binding.sortSubtitlesHolder.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                            lp.weight = 100f
+                            lp.width = 0
+                            binding.sortSubtitlesHolder.layoutParams = lp
+                        }
+                    }
+                    binding.subtitlesText.text = ctx.getString(R.string.player_subtitles_settings)
+                }
+
+                if (!showSubtitles) {
+                    binding.sortSubtitlesHolder.isGone = true
+                    if (isPortrait) {
+                        (binding.sortSourcesHolder.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                            lp.weight = 1f
+                            lp.height = 0
+                            binding.sortSourcesHolder.layoutParams = lp
+                        }
+                    } else {
+                        (binding.sortSourcesHolder.layoutParams as? LinearLayout.LayoutParams)?.let { lp ->
+                            lp.weight = 100f
+                            lp.width = 0
+                            binding.sortSourcesHolder.layoutParams = lp
+                        }
+                    }
+                }
+
                 val loadFromFileFooter: TextView =
                     layoutInflater.inflate(R.layout.sort_bottom_footer_add_choice, null) as TextView
 
@@ -1113,6 +1177,13 @@ class GeneratorPlayer : FullScreenPlayer() {
                         subtitlesFragment.systemBarsAddPadding = true
                         subtitlesFragment.show(this.parentFragmentManager, "SubtitleSettings")
                     }
+                }
+
+                binding.subtitleSyncBtt.setOnClickListener {
+                    shouldDismiss = false
+                    sourceDialog.dismissSafe(activity)
+                    selectSourceDialog = null
+                    showSubtitleOffsetDialog()
                 }
 
                 fun dismiss() {
@@ -1180,6 +1251,7 @@ class GeneratorPlayer : FullScreenPlayer() {
                 var startSource = 0
                 // Filtered and sorted links
                 var currentHiddenFooter: View? = null
+                var currentSearchAllFooter: View? = null
                 var filteredLinks: List<DisplayLink> = emptyList()
 
                 fun refreshLinks(qualityProfile: Int) {
@@ -1227,6 +1299,7 @@ class GeneratorPlayer : FullScreenPlayer() {
 
                         val hiddenLinks = sortedLinks.size - filteredLinks.size
                         providerList.removeFooterView(currentHiddenFooter)
+                        providerList.removeFooterView(currentSearchAllFooter)
 
                         if (hiddenLinks > 0) {
                             val hiddenLinksFooter: TextView = layoutInflater.inflate(
@@ -1243,10 +1316,26 @@ class GeneratorPlayer : FullScreenPlayer() {
                             hiddenLinksFooter.setCompoundDrawables(null, null, null, null)
                             hiddenLinksFooter.setTypeface(null, Typeface.ITALIC)
                         }
+
+                        val searchAllFooter: TextView = layoutInflater.inflate(
+                            R.layout.sort_bottom_footer_add_choice, null
+                        ) as TextView
+                        searchAllFooter.text = "🔍 Search other sources"
+                        searchAllFooter.setCompoundDrawables(null, null, null, null)
+                        searchAllFooter.setTypeface(null, Typeface.BOLD)
+                        searchAllFooter.setOnClickListener {
+                            com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider.forceSearchAll = true
+                            viewModel.loadLinks()
+                            sourceDialog.dismissSafe(activity)
+                        }
+                        providerList.addFooterView(searchAllFooter, null, false)
+                        currentSearchAllFooter = searchAllFooter
                     }
                 }
 
-                refreshLinks(currentQualityProfile)
+                if (showSources) {
+                    refreshLinks(currentQualityProfile)
+                }
 
                 sourceDialog.setOnDismissListener {
                     if (shouldDismiss) dismiss()
@@ -1443,8 +1532,8 @@ class GeneratorPlayer : FullScreenPlayer() {
                 }
 
                 binding.applyBtt.setOnClickListener {
-                    var init = sourceIndex != startSource
-                    if (subtitleGroupIndex != subtitleGroupIndexStart || subtitleOptionIndex != subtitleOptionIndexStart) {
+                    var init = if (showSources) (sourceIndex != startSource) else false
+                    if (showSubtitles && (subtitleGroupIndex != subtitleGroupIndexStart || subtitleOptionIndex != subtitleOptionIndexStart)) {
                         init = init or if (subtitleGroupIndex <= 0) {
                             noSubtitles()
                         } else {
@@ -1455,7 +1544,7 @@ class GeneratorPlayer : FullScreenPlayer() {
                             } ?: false
                         }
                     }
-                    if (init) {
+                    if (init && showSources) {
                         filteredLinks.getOrNull(sourceIndex)?.let {
                             loadLink(it.link, true)
                         }
@@ -1689,11 +1778,29 @@ class GeneratorPlayer : FullScreenPlayer() {
             WatchTogetherManager.currentRoom?.streamUrl
         } else null
 
+        val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
+        val tmdbId = load?.getTMDbId()?.toIntOrNull()
+            ?: (currentMeta as? ResultEpisode)?.data?.let { d ->
+                Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                    ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+            }
+        val mediaTitle = getCurrentMediaTitle() ?: load?.name ?: (currentMeta as? ResultEpisode)?.headerName ?: (currentMeta as? ResultEpisode)?.name
+        val prefScraper = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredScraper(mediaTitle, tmdbId)
+        val prefServer = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredServer(mediaTitle, tmdbId)
+
         val firstAvailableLink = if (!hostStreamUrl.isNullOrBlank()) {
             links.firstOrNull { it.shouldUseLink && it.link.first?.url == hostStreamUrl }?.link
                 ?: links.firstOrNull { it.shouldUseLink }?.link
         } else {
-            links.firstOrNull { it.shouldUseLink }?.link
+            val preferredMatch = if (!prefScraper.isNullOrBlank() || !prefServer.isNullOrBlank()) {
+                links.filter {
+                    it.shouldUseLink && com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.matchesPreferred(it.link, prefScraper, prefServer)
+                }.maxByOrNull {
+                    com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.matchScore(it.link, prefScraper, prefServer)
+                }?.link
+            } else null
+
+            preferredMatch ?: links.firstOrNull { it.shouldUseLink }?.link
         }
         if (firstAvailableLink == null) {
             noLinksFound()
@@ -1718,7 +1825,7 @@ class GeneratorPlayer : FullScreenPlayer() {
 
         val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
         val episode = currentMeta as? ResultEpisode
-        val mediaTitle = load?.name ?: (currentMeta as? ResultEpisode)?.name ?: getCurrentMediaTitle()
+        val mediaTitle = getCurrentMediaTitle() ?: load?.name ?: (currentMeta as? ResultEpisode)?.headerName ?: (currentMeta as? ResultEpisode)?.name
 
         if (titleView.text.isNullOrBlank() && !mediaTitle.isNullOrBlank()) {
             titleView.text = mediaTitle
@@ -2595,7 +2702,7 @@ class GeneratorPlayer : FullScreenPlayer() {
 
         val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
         val episode = currentMeta as? ResultEpisode
-        val mediaTitle = load?.name ?: episode?.name ?: getCurrentMediaTitle()
+        val mediaTitle = getCurrentMediaTitle() ?: load?.name ?: episode?.headerName ?: episode?.name
 
         // 1. Show Media Title & Episode / Season subtitle immediately
         if (!mediaTitle.isNullOrBlank()) {
@@ -2841,10 +2948,29 @@ class GeneratorPlayer : FullScreenPlayer() {
             // Hide skip loading button so user never gets stuck waiting
             binding.overlayLoadingSkipButton.isVisible = false
 
-            // Start playback IMMEDIATELY as soon as any usable link is found!
+            // Start playback IMMEDIATELY as soon as preferred or usable link is found!
             safe {
                 if (!isPlayerActive.get() && usableLinks > 0) {
-                    startPlayer()
+                    val load = viewModel.state.generatorState?.response ?: (viewModel.generator as? RepoLinkGenerator)?.page
+                    val tmdbId = load?.getTMDbId()?.toIntOrNull()
+                        ?: (currentMeta as? ResultEpisode)?.data?.let { d ->
+                            Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                                ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                        }
+                    val mediaTitle = getCurrentMediaTitle() ?: load?.name ?: (currentMeta as? ResultEpisode)?.headerName ?: (currentMeta as? ResultEpisode)?.name
+                    val prefScraper = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredScraper(mediaTitle, tmdbId)
+                    val prefServer = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredServer(mediaTitle, tmdbId)
+
+                    if (!prefScraper.isNullOrBlank() || !prefServer.isNullOrBlank()) {
+                        val hasPreferred = sortedLinks.any {
+                            it.shouldUseLink && com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.matchesPreferred(it.link, prefScraper, prefServer)
+                        }
+                        if (hasPreferred) {
+                            startPlayer()
+                        }
+                    } else {
+                        startPlayer()
+                    }
                 }
             }
 

@@ -33,7 +33,12 @@ import com.lagradost.cloudstream3.ui.WatchType
 import com.lagradost.cloudstream3.ui.quicksearch.QuickSearchFragment
 import com.lagradost.cloudstream3.ui.search.SEARCH_ACTION_FOCUSED
 import com.lagradost.cloudstream3.ui.search.SearchClickCallback
+import com.google.android.material.bottomnavigation.BottomNavigationView
+import com.google.android.material.navigationrail.NavigationRailView
+import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.ui.search.SearchFragment
 import com.lagradost.cloudstream3.ui.search.SearchHelper
+import com.lagradost.cloudstream3.utils.UIHelper.navigate
 import com.lagradost.cloudstream3.ui.settings.Globals.TV
 import com.lagradost.cloudstream3.ui.settings.Globals.isLayout
 import com.lagradost.cloudstream3.utils.AppContextUtils.addProgramsToContinueWatching
@@ -687,9 +692,22 @@ class HomeViewModel : ViewModel() {
     }
 
     fun queryTextSubmit(query: String) {
-        QuickSearchFragment.pushSearch(
-            query,
-            repo?.name?.let { arrayOf(it) })
+        val act = activity as? MainActivity
+        if (query.isNotBlank()) {
+            MainActivity.nextSearchQuery = query
+        }
+        val navView = act?.findViewById<BottomNavigationView>(R.id.nav_view)
+        val navRail = act?.findViewById<NavigationRailView>(R.id.nav_rail_view)
+        if (navView != null) {
+            navView.selectedItemId = R.id.navigation_search
+        } else if (navRail != null) {
+            navRail.selectedItemId = R.id.navigation_search
+        } else {
+            activity.navigate(
+                R.id.navigation_search,
+                if (query.isNotBlank()) SearchFragment.newInstance(query) else null
+            )
+        }
     }
 
     fun queryTextChange(newText: String) {

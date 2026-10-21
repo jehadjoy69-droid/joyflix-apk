@@ -255,10 +255,15 @@ object PluginManager {
         fun isUnwanted(name: String, internalName: String, url: String? = null, tvTypes: List<String>? = null): Boolean {
             val n = name.lowercase()
             val i = internalName.lowercase()
+            val u = url?.lowercase() ?: ""
             return n.contains("watchparty") || n.contains("watch party") || n.contains("syncplay") ||
                     i.contains("watchparty") || i.contains("watch party") || i.contains("syncplay") ||
                     n.contains("netflix") || n.contains("netmirror") ||
                     i.contains("netflix") || i.contains("netmirror") ||
+                    n.contains("reelfren") || i.contains("reelfren") ||
+                    n.contains("smarttube") || n.contains("smart tube") || n.contains("smart-tube") || n.contains("smart_tube") ||
+                    i.contains("smarttube") || i.contains("smart tube") || i.contains("smart-tube") || i.contains("smart_tube") ||
+                    u.contains("smarttube") || u.contains("smart-tube") || u.contains("smart_tube") ||
                     NsfwHelper.isBlocked(name, url, null, tvTypes) ||
                     NsfwHelper.isBlocked(internalName, url, null, tvTypes)
         }
@@ -274,6 +279,36 @@ object PluginManager {
                         unloadPlugin(p.filePath)
                         File(p.filePath).delete()
                         deletePluginData(p)
+                    }
+                }
+            } catch (t: Throwable) {
+                logError(t)
+            }
+
+            try {
+                val currentLocal = getPluginsLocal()
+                for (p in currentLocal) {
+                    val pName = File(p.filePath).nameWithoutExtension
+                    if (isUnwanted(p.internalName, p.internalName, p.url) || isUnwanted(pName, pName, p.url)) {
+                        Log.i(TAG, "Purging unwanted/NSFW local plugin: ${p.filePath}")
+                        unloadPlugin(p.filePath)
+                        File(p.filePath).delete()
+                        deletePluginData(p)
+                    }
+                }
+            } catch (t: Throwable) {
+                logError(t)
+            }
+
+            try {
+                val extensionsDir = File("${activity.filesDir}/${ONLINE_PLUGINS_FOLDER}")
+                if (extensionsDir.exists()) {
+                    extensionsDir.walkTopDown().forEach { file ->
+                        val lower = file.name.lowercase()
+                        if (lower.contains("smarttube") || lower.contains("smart tube") || lower.contains("smart-tube") || lower.contains("smart_tube")) {
+                            Log.i(TAG, "Purging orphaned smarttube file: ${file.absolutePath}")
+                            file.deleteRecursively()
+                        }
                     }
                 }
             } catch (t: Throwable) {
@@ -774,11 +809,15 @@ object PluginManager {
 
             val isBlocked = lowerName.contains("netflix") || lowerName.contains("netmirror") ||
                 lowerName.contains("watchparty") || lowerName.contains("watch party") || lowerName.contains("syncplay") ||
+                lowerName.contains("reelfren") || lowerName.contains("smarttube") || lowerName.contains("smart tube") || lowerName.contains("smart-tube") || lowerName.contains("smart_tube") ||
                 lowerInternal.contains("netflix") || lowerInternal.contains("netmirror") ||
                 lowerInternal.contains("watchparty") || lowerInternal.contains("watch party") || lowerInternal.contains("syncplay") ||
+                lowerInternal.contains("reelfren") || lowerInternal.contains("smarttube") || lowerInternal.contains("smart tube") || lowerInternal.contains("smart-tube") || lowerInternal.contains("smart_tube") ||
                 lowerFile.contains("netflix") || lowerFile.contains("netmirror") ||
                 lowerFile.contains("watchparty") || lowerFile.contains("watch party") || lowerFile.contains("syncplay") ||
+                lowerFile.contains("reelfren") || lowerFile.contains("smarttube") || lowerFile.contains("smart tube") || lowerFile.contains("smart-tube") || lowerFile.contains("smart_tube") ||
                 lowerClass.contains("watchparty") || lowerClass.contains("watch_party") || lowerClass.contains("syncplay") ||
+                lowerClass.contains("smarttube") ||
                 NsfwHelper.isBlocked(name, data.url) ||
                 NsfwHelper.isBlocked(data.internalName, data.url) ||
                 NsfwHelper.isBlocked(fileName, data.url)
@@ -941,8 +980,13 @@ object PluginManager {
     ): Boolean {
         if (internalName.contains("netflix", ignoreCase = true) ||
             internalName.contains("netmirror", ignoreCase = true) ||
+            internalName.contains("smarttube", ignoreCase = true) ||
+            internalName.contains("smart tube", ignoreCase = true) ||
+            internalName.contains("watchparty", ignoreCase = true) ||
+            internalName.contains("reelfren", ignoreCase = true) ||
             pluginUrl.contains("netmirror", ignoreCase = true) ||
             pluginUrl.contains("netflix", ignoreCase = true) ||
+            pluginUrl.contains("smarttube", ignoreCase = true) ||
             NsfwHelper.isBlocked(internalName, pluginUrl)) {
             Log.i(TAG, "Blocked downloading NSFW/unwanted plugin: $internalName")
             return false

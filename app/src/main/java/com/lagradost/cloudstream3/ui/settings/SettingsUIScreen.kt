@@ -1,6 +1,9 @@
 package com.lagradost.cloudstream3.ui.settings
 
+import android.app.Activity
 import android.os.Build
+import androidx.activity.compose.LocalActivity
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.foundation.background
 import androidx.compose.foundation.border
 import androidx.compose.foundation.layout.Box
@@ -78,6 +81,8 @@ object SettingsUIScreen : SearchableSettings {
     @Composable
     override fun getPreferences(): List<Preference> {
         val settings = rememberAppSettings()
+        val context = LocalContext.current
+        val currentActivity = LocalActivity.current ?: (context as? Activity) ?: activity
 
         return persistentListOf(
             Preference.PreferenceGroup(
@@ -102,7 +107,7 @@ object SettingsUIScreen : SearchableSettings {
                         onValueChanged = { newValue ->
                             settings.ui.primaryColor.set(newValue)
                             safe {
-                                activity?.recreate()
+                                currentActivity?.recreate()
                             }
                             true
                         }),
@@ -127,7 +132,7 @@ object SettingsUIScreen : SearchableSettings {
                         onValueChanged = { newValue ->
                             settings.ui.theme.set(newValue)
                             safe {
-                                activity?.recreate()
+                                currentActivity?.recreate()
                             }
                             true
                         }),
@@ -141,8 +146,8 @@ object SettingsUIScreen : SearchableSettings {
                         onValueChanged = { newValue ->
                             settings.ui.layout.set(newValue)
                             safe {
-                                activity?.updateTv()
-                                activity?.recreate()
+                                currentActivity?.updateTv()
+                                currentActivity?.recreate()
                             }
                             true
                         }),
@@ -162,7 +167,7 @@ object SettingsUIScreen : SearchableSettings {
                         onValueChanged = { newValue ->
                             settings.ui.overscanDp.set(newValue)
                             val padding = newValue.toPx
-                            (activity as? MainActivity)?.binding?.homeRoot?.setPadding(
+                            (currentActivity as? MainActivity)?.binding?.homeRoot?.setPadding(
                                 padding, padding, padding, padding
                             )
                             return@SliderPreference false
@@ -263,7 +268,7 @@ object SettingsUIScreen : SearchableSettings {
                             HomeChildItemAdapter.sharedPool.clear()
                             ParentItemAdapter.sharedPool.clear()
                             SearchAdapter.sharedPool.clear()
-                            activity?.let { HomeChildItemAdapter.updatePosterSize(it, newValue) }
+                            currentActivity?.let { HomeChildItemAdapter.updatePosterSize(it, newValue) }
                             settings.ui.posterSize.set(newValue)
                             return@SliderPreference false
                         }),

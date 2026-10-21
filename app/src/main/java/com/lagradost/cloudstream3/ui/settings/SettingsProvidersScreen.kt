@@ -83,7 +83,7 @@ object SettingsProvidersScreen : SearchableSettings {
             subtitle = stringResource(R.string.test_extensions_summary),
             icon = painterResource(R.drawable.baseline_network_ping_24),
             onClick = {
-                activity?.navigate(R.id.navigation_test_providers)
+                activity?.navigate(R.id.action_navigation_global_to_navigation_test_providers)
             }))
     }
 }

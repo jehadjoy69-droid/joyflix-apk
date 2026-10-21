@@ -209,6 +209,7 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
     }
 
     open fun showMirrorsDialogue() {}
+    open fun showSubtitlesDialogue() {}
     open fun showTracksDialogue() {}
     open fun openOnlineSubPicker(
         context: android.content.Context,
@@ -944,7 +945,13 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     resultMetaType.setText(d.typeText)
                     resultMetaYear.setText(d.yearText)
                     resultMetaDuration.setText(d.durationText)
-                    resultMetaRating.setText(d.ratingText)
+                    val ratingStr = d.ratingText?.asStringNull(root.context)
+                    if (!ratingStr.isNullOrBlank()) {
+                        resultMetaRating.text = "IMDb $ratingStr"
+                        resultMetaRating.isVisible = true
+                    } else {
+                        resultMetaRating.isVisible = false
+                    }
                     resultMetaStatus.setText(d.onGoingText)
                     resultMetaContentRating.setText(d.contentRatingText)
                     resultCastText.setText(d.actorsText)
@@ -989,6 +996,12 @@ open class ResultFragmentPhone : BaseFragment<FragmentResultSwipeBinding>(
                     }
 
                     populateChips(resultTag, d.tags)
+                    if (!d.tags.isNullOrEmpty()) {
+                        resultGenresText.text = d.tags.joinToString(" • ")
+                        resultGenresText.isVisible = true
+                    } else {
+                        resultGenresText.isVisible = false
+                    }
 
                     resultComingSoon.isVisible = d.comingSoon
                     resultDataHolder.isGone = d.comingSoon

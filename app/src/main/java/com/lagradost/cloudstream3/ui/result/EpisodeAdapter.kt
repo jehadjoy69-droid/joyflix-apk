@@ -11,6 +11,8 @@ import coil3.dispose
 import com.lagradost.cloudstream3.APIHolder.unixTimeMS
 import com.lagradost.cloudstream3.CommonActivity
 import com.lagradost.cloudstream3.R
+import com.lagradost.cloudstream3.actions.AlwaysAskAction
+import com.lagradost.cloudstream3.actions.OpenInAppAction
 import com.lagradost.cloudstream3.actions.VideoClickActionHolder
 import com.lagradost.cloudstream3.databinding.ResultEpisodeBinding
 import com.lagradost.cloudstream3.databinding.ResultEpisodeLargeBinding
@@ -93,6 +95,11 @@ class EpisodeAdapter(
                     ?: ACTION_PLAY_EPISODE_IN_PLAYER
             }
             if (playerPref == "AutoPlay") {
+                return ACTION_PLAY_EPISODE_IN_PLAYER
+            }
+
+            val action = VideoClickActionHolder.getByUniqueId(playerPref)
+            if (action is OpenInAppAction || action is AlwaysAskAction) {
                 return ACTION_PLAY_EPISODE_IN_PLAYER
             }
 

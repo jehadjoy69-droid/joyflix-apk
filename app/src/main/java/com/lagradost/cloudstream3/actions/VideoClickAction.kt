@@ -82,7 +82,7 @@ object VideoClickActionHolder {
     fun makeOptionMap(activity: Activity?, video: ResultEpisode) = allVideoClickActions
         // We need to have index before filtering
         .mapIndexed { id, it -> it to id + ACTION_ID_OFFSET }
-        .filter { it.first.shouldShowSafe(activity, video) }
+        .filter { it.first.shouldShowSafe(activity, video) && it.first !is OpenInAppAction && it.first !is AlwaysAskAction }
         .map { it.first.name to it.second }
 
 
@@ -98,7 +98,7 @@ object VideoClickActionHolder {
             ?.second
     }
 
-    fun getPlayers(context: Context? = null) = allVideoClickActions.filter { it.isPlayer && it.shouldShowSafe(context, null) }
+    fun getPlayers(context: Context? = null): List<VideoClickAction> = emptyList()
 }
 
 abstract class VideoClickAction {

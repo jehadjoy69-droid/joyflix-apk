@@ -1,7 +1,9 @@
 package com.lagradost.cloudstream3.ui.settings
 
+import android.app.Activity
 import android.content.Intent
 import android.net.Uri
+import androidx.activity.compose.LocalActivity
 import androidx.activity.compose.rememberLauncherForActivityResult
 import androidx.activity.result.contract.ActivityResultContracts
 import androidx.compose.runtime.Composable
@@ -9,10 +11,13 @@ import androidx.compose.runtime.getValue
 import androidx.compose.runtime.mutableStateOf
 import androidx.compose.runtime.remember
 import androidx.compose.runtime.setValue
+import androidx.compose.ui.platform.LocalContext
 import androidx.compose.ui.res.integerArrayResource
 import androidx.compose.ui.res.painterResource
 import androidx.compose.ui.res.stringArrayResource
 import androidx.compose.ui.res.stringResource
+import androidx.core.content.edit
+import androidx.preference.PreferenceManager
 import com.lagradost.cloudstream3.AutoDownloadMode
 import com.lagradost.cloudstream3.BuildConfig
 import com.lagradost.cloudstream3.CloudStreamApp
@@ -63,6 +68,10 @@ object SettingsUpdatesScreen : SearchableSettings {
                     // store the actual URI instead of the path due to permissions.
                     // filePath should only be used for cosmetic purposes.
                     val visual = filePath ?: uri.toString()
+                    PreferenceManager.getDefaultSharedPreferences(context).edit {
+                        putString(context.getString(R.string.backup_path_key), uri.toString())
+                        putString(context.getString(R.string.backup_dir_key), visual)
+                    }
                     settings.backup.path.set(uri.toString())
                     settings.backup.visualPath.set(visual)
                 } catch (t: Throwable) {
@@ -70,7 +79,14 @@ object SettingsUpdatesScreen : SearchableSettings {
                 }
             }
 
+        val context = LocalContext.current
+        val currentActivity = LocalActivity.current ?: (context as? Activity) ?: activity
+        val defaultBackupVisual = remember(context) {
+            BackupUtils.getDefaultBackupDir(context)?.filePath() ?: ""
+        }
         val visualBackupPath by settings.backup.visualPath.collectAsState()
+        val displayBackupPath = visualBackupPath.ifBlank { defaultBackupVisual }
+
         var showDialog by remember { mutableStateOf(false) }
 
         if (showDialog) {
@@ -129,7 +145,8 @@ object SettingsUpdatesScreen : SearchableSettings {
                         title = stringResource(R.string.backup_settings),
                         icon = painterResource(R.drawable.save_as_24px),
                         onClick = {
-                            BackupUtils.backup(activity)
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            BackupUtils.backup(act)
                         }
                     ),
                     Preference.PreferenceItem.ListPreference(
@@ -143,7 +160,7 @@ object SettingsUpdatesScreen : SearchableSettings {
                     Preference.PreferenceItem.TextPreference(
                         title = stringResource(R.string.backup_path_title),
                         icon = painterResource(R.drawable.folder_24px),
-                        subtitle = visualBackupPath,
+                        subtitle = displayBackupPath,
                         onClick = {
                             // This is not a ListPreference because the old selection system is
                             // broken af. This needs to be refactored to QuickNovels download path
@@ -155,7 +172,8 @@ object SettingsUpdatesScreen : SearchableSettings {
                         title = stringResource(R.string.restore_settings),
                         icon = painterResource(R.drawable.restore_page_24px),
                         onClick = {
-                            activity?.restorePrompt()
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            act?.restorePrompt()
                         }
                     ),
                 )
@@ -183,8 +201,9 @@ object SettingsUpdatesScreen : SearchableSettings {
                         icon = painterResource(R.drawable.extention_download),
                         onClick = {
                             ioSafe {
+                                val act = currentActivity ?: (context as? Activity) ?: activity
                                 PluginManager.___DO_NOT_CALL_FROM_A_PLUGIN_manuallyReloadAndUpdatePlugins(
-                                    activity ?: return@ioSafe
+                                    act ?: return@ioSafe
                                 )
                             }
                         }
@@ -194,7 +213,8 @@ object SettingsUpdatesScreen : SearchableSettings {
                         subtitle = stringResource(R.string.test_extensions_summary),
                         icon = painterResource(R.drawable.baseline_network_ping_24),
                         onClick = {
-                            activity?.navigate(R.id.navigation_test_providers)
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            act?.navigate(R.id.action_navigation_global_to_navigation_test_providers)
                         })
                 )
             ),
@@ -212,7 +232,8 @@ object SettingsUpdatesScreen : SearchableSettings {
                         title = stringResource(R.string.redo_setup_process),
                         icon = painterResource(R.drawable.construction_24px),
                         onClick = {
-                            activity?.navigate(R.id.navigation_setup_language)
+                            val act = currentActivity ?: (context as? Activity) ?: activity
+                            act?.navigate(R.id.action_navigation_global_to_navigation_setup_language)
                         }
                     ),
                 )

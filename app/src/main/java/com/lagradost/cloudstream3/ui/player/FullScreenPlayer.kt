@@ -7,6 +7,8 @@ import android.app.Activity
 import android.app.Dialog
 import android.content.Context
 import android.content.DialogInterface
+import android.content.Intent
+import android.net.Uri
 import android.content.pm.ActivityInfo
 import androidx.core.app.ActivityCompat
 import androidx.core.content.ContextCompat
@@ -399,6 +401,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         throw NotImplementedError()
     }
 
+    open fun showSubtitlesDialogue() {}
+
     open fun showTracksDialogue() {
         throw NotImplementedError()
     }
@@ -522,8 +526,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             track.sampleMimeType == MimeTypes.APPLICATION_MEDIA3_CUES
         }
         // Subtitle offset is not possible on built-in media3 tracks
-        playerBinding?.playerSubtitleOffsetBtt?.isGone =
-            isBuiltinSubtitles || tracks.currentTextTracks.isEmpty()
+        playerBinding?.playerSubtitleOffsetBtt?.isVisible =
+            tracks.currentTextTracks.isNotEmpty() && !isBuiltinSubtitles
     }
 
     private fun restoreOrientationWithSensor(activity: Activity) {
@@ -670,7 +674,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
         player.seekTime(85000) // skip 85s
     }
 
-    private fun showSubtitleOffsetDialog() {
+    fun showSubtitleOffsetDialog() {
         val ctx = context ?: return
         // Pause player because the subtitles cannot be continuously updated to follow playback.
         player.handleEvent(
@@ -1714,6 +1718,8 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             val showPlayerEpisodes = !isGone && isThereEpisodes()
             playerEpisodesButtonRoot.isVisible = showPlayerEpisodes
             playerEpisodesButton.isVisible = showPlayerEpisodes
+            playerEpisodesBtt.isVisible = showPlayerEpisodes
+            playerOpenExternalBtt.isGone = true
             playerVideoTitleHolder.isGone = togglePlayerTitleGone || playerVideoTitle.text.isBlank()
             playerVideoTitleRez.isGone = isGone || playerVideoTitleRez.text.isBlank()
             playerVideoInfo.isGone = isGone || playerVideoInfo.text.isBlank()
@@ -1722,6 +1728,7 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             playerLock.isGone = true
             playerGoBackHolder.isGone = isGone
             playerSourcesBtt.isGone = isGone
+            playerSubtitlesBtt.isGone = isGone
             playerWatchTogetherBtt.isVisible = !isGone
             playerChatBtt.isVisible = !isGone
             if (isGone && playerChatBarContainer.isVisible) {
@@ -1912,7 +1919,11 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 player.handleEvent(CSPlayerEvent.ToggleMute)
             }
 
-            KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_NUMPAD_9, KeyEvent.KEYCODE_9 -> {
+            KeyEvent.KEYCODE_S, KeyEvent.KEYCODE_CAPTIONS -> {
+                showSubtitlesDialogue()
+            }
+
+            KeyEvent.KEYCODE_NUMPAD_9, KeyEvent.KEYCODE_9 -> {
                 showMirrorsDialogue()
             }
             // OpenSubtitles shortcut
@@ -2243,6 +2254,10 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
                 toggleLock()
             }
 
+            playerSubtitlesBtt.setOnClickListener {
+                showSubtitlesDialogue()
+            }
+
             playerSubtitleOffsetBtt.setOnClickListener {
                 showSubtitleOffsetDialog()
             }
@@ -2253,6 +2268,16 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
 
             playerSourcesBtt.setOnClickListener {
                 showMirrorsDialogue()
+            }
+
+            playerEpisodesBtt.setOnClickListener {
+                autoHide()
+                toggleEpisodesOverlay(show = true)
+            }
+
+            playerOpenExternalBtt.setOnClickListener {
+                autoHide()
+                openInExternalPlayer()
             }
 
             playerTracksBtt.setOnClickListener {
@@ -2675,6 +2700,47 @@ open class FullScreenPlayer : AbstractPlayerFragment<FragmentPlayerBinding>(
             if (previousPlayStatus) player.handleEvent(CSPlayerEvent.Play)
             isShowingEpisodeOverlay = false
             animateEpisodesOverlay(false)
+        }
+    }
+
+    private fun openInExternalPlayer() {
+        val streamUrl = player.getCurrentStreamUrl()
+        if (streamUrl.isNullOrBlank()) {
+            showToast("No active stream found to open externally")
+            return
+        }
+        try {
+            val uri = Uri.parse(streamUrl)
+            val title = playerBinding?.playerVideoTitle?.text?.toString() ?: "Video"
+            val intent = Intent(Intent.ACTION_VIEW).apply {
+                setDataAndType(uri, "video/*")
+                addCategory(Intent.CATEGORY_DEFAULT)
+                putExtra(Intent.EXTRA_TITLE, title)
+                putExtra("title", title)
+                putExtra("forcename", title)
+                val currentPos = player.getPosition() ?: 0L
+                if (currentPos > 0) {
+                    putExtra("position", currentPos.toInt())
+                    putExtra("startfrom", currentPos.toInt())
+                    putExtra("forceresume", true)
+                    putExtra("from_start", false)
+                }
+                player.getCurrentLink()?.headers?.let { headers ->
+                    if (headers.isNotEmpty()) {
+                        val headerArray = headers.flatMap { listOf(it.key, it.value) }.toTypedArray()
+                        putExtra("headers", headerArray)
+                    }
+                }
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+                addFlags(Intent.FLAG_GRANT_READ_URI_PERMISSION)
+            }
+            val chooser = Intent.createChooser(intent, getString(R.string.external_player)).apply {
+                addFlags(Intent.FLAG_ACTIVITY_NEW_TASK)
+            }
+            context?.startActivity(chooser)
+        } catch (e: Exception) {
+            logError(e)
+            showToast("Failed to open external player: ${e.message}")
         }
     }
 

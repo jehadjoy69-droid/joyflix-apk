@@ -47,6 +47,7 @@ import com.lagradost.cloudstream3.SubtitleFile
 import com.lagradost.cloudstream3.TorrentLoadResponse
 import com.lagradost.cloudstream3.TrackerType
 import com.lagradost.cloudstream3.TrailerData
+import com.lagradost.cloudstream3.LoadResponse.Companion.getTMDbId
 import com.lagradost.cloudstream3.TvSeriesLoadResponse
 import com.lagradost.cloudstream3.TvType
 import com.lagradost.cloudstream3.VPNStatus
@@ -1487,14 +1488,32 @@ class ResultViewModel2 : ViewModel() {
                             val gen = generator ?: RepoLinkGenerator(listOf(click.data), page = currentResponse)
                             val rawIndex = gen.videos.indexOfFirst { it.id == click.data.id }
                             val index = if (rawIndex < 0) 0 else rawIndex
-                            StreamSourcesDialogFragment.show(
-                                ctx,
-                                click.data,
-                                currentResponse,
-                                gen,
-                                index,
-                                list
-                            )
+
+                            val tmdbId = currentResponse?.getTMDbId()?.toIntOrNull()
+                                ?: click.data.data.let { d ->
+                                    Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                                        ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                                }
+                            val mediaTitle = currentResponse?.name ?: click.data.headerName ?: click.data.name
+                            val preferredScraper = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredScraper(mediaTitle, tmdbId)
+
+                            if (preferredScraper.isNullOrBlank()) {
+                                StreamSourcesDialogFragment.show(
+                                    ctx,
+                                    click.data,
+                                    currentResponse,
+                                    gen,
+                                    index,
+                                    list
+                                )
+                            } else {
+                                ctx.navigate(
+                                    R.id.global_to_navigation_player,
+                                    GeneratorPlayer.newInstance(
+                                        gen, index, list
+                                    )
+                                )
+                            }
                         } else {
                             val action = getPlayerAction(ctx)
                             handleEpisodeClickEvent(
@@ -1638,14 +1657,31 @@ class ResultViewModel2 : ViewModel() {
                 val act = activity
                 val isWatchTogetherGuest = WatchTogetherManager.isInRoom && !WatchTogetherManager.isHost
                 if (!isWatchTogetherGuest && act is androidx.fragment.app.FragmentActivity) {
-                    StreamSourcesDialogFragment.show(
-                        act,
-                        click.data,
-                        currentResponse,
-                        gen,
-                        index,
-                        list
-                    )
+                    val tmdbId = currentResponse?.getTMDbId()?.toIntOrNull()
+                        ?: click.data.data.let { d ->
+                            Regex(""""tmdbID"\s*:\s*(\d+)""").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                                ?: Regex("tmdbID=(\\d+)").find(d)?.groupValues?.get(1)?.toIntOrNull()
+                        }
+                    val mediaTitle = currentResponse?.name ?: click.data.headerName ?: click.data.name
+                    val preferredScraper = com.lagradost.cloudstream3.utils.MediaSourcePreferenceHelper.getPreferredScraper(mediaTitle, tmdbId)
+
+                    if (preferredScraper.isNullOrBlank()) {
+                        StreamSourcesDialogFragment.show(
+                            act,
+                            click.data,
+                            currentResponse,
+                            gen,
+                            index,
+                            list
+                        )
+                    } else {
+                        act.navigate(
+                            R.id.global_to_navigation_player,
+                            GeneratorPlayer.newInstance(
+                                gen, index, list
+                            )
+                        )
+                    }
                 } else if (currentResponse?.type == TvType.CustomMedia) {
                     gen.generateLinks(
                         offset = index,
@@ -1895,6 +1931,39 @@ class ResultViewModel2 : ViewModel() {
                         updateCount > 0
                     }.any { it }
                 })
+
+            try {
+                if (logoUrl.isNullOrBlank() || backgroundPosterUrl.isNullOrBlank() || score == null) {
+                    val tmdbId = getTMDbId()?.toIntOrNull()
+                    val isMovie = (type == TvType.Movie || type == TvType.AnimeMovie || this is MovieLoadResponse)
+                    val info = com.lagradost.cloudstream3.ui.player.TmdbMetadataHelper.fetchMediaInfo(
+                        rawTitle = name,
+                        tmdbId = tmdbId,
+                        isMovie = isMovie
+                    )
+                    if (info != null) {
+                        if (logoUrl.isNullOrBlank() && !info.logoUrl.isNullOrBlank()) {
+                            logoUrl = info.logoUrl
+                        }
+                        if (backgroundPosterUrl.isNullOrBlank() && !info.backdropUrl.isNullOrBlank()) {
+                            backgroundPosterUrl = info.backdropUrl
+                        }
+                        if (plot.isNullOrBlank() && !info.overview.isNullOrBlank()) {
+                            plot = info.overview
+                        }
+                        if (year == null && !info.year.isNullOrBlank()) {
+                            year = info.year.toIntOrNull()
+                        }
+                        if (score == null && !info.rating.isNullOrBlank()) {
+                            info.rating.toDoubleOrNull()?.let { r ->
+                                score = Score.from((r * 10).toInt(), 100)
+                            }
+                        }
+                    }
+                }
+            } catch (t: Throwable) {
+                logError(t)
+            }
         }
         return out to updateEpisodes
     }

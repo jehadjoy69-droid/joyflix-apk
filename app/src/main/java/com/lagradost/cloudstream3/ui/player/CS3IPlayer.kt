@@ -203,6 +203,7 @@ class CS3IPlayer : IPlayer {
     override fun getIsPlaying(): Boolean = isPlaying
     override fun getPlaybackSpeed(): Float = playBackSpeed
     override fun getCurrentStreamUrl(): String? = currentLink?.url ?: currentDownloadedFile?.uri?.toString()
+    override fun getCurrentLink(): ExtractorLink? = currentLink
 
     /**
      * Tracks reported to be used by exoplayer, since sometimes it has a mind of it's own when selecting subs.
@@ -511,6 +512,7 @@ class CS3IPlayer : IPlayer {
                     .setTrackTypeDisabled(TRACK_TYPE_TEXT, true)
                     .clearOverridesOfType(TRACK_TYPE_TEXT)
             )
+            subtitleHelper.subtitleView?.setCues(emptyList())
             return false
         }
         // Handle subtitle based on status

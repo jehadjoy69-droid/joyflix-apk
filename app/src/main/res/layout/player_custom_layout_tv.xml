@@ -1271,87 +1271,111 @@
                             android:visibility="gone" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/player_skip_op"
-                            style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_pause_play"
-                            android:nextFocusRight="@id/player_skip_episode"
-                            android:nextFocusUp="@id/player_pause_play"
-                            android:nextFocusDown="@id/player_skip_episode"
-                            android:text="@string/video_skip_op"
-                            app:icon="@drawable/ic_baseline_fast_forward_24" />
-
-                        <com.google.android.material.button.MaterialButton
                             android:id="@+id/player_skip_episode"
                             style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_skip_op"
-                            android:nextFocusRight="@id/player_resize_btt"
+                            android:nextFocusLeft="@id/player_pause_play"
+                            android:nextFocusRight="@id/player_subtitles_btt"
                             android:nextFocusUp="@id/player_pause_play"
-                            android:nextFocusDown="@id/player_resize_btt"
+                            android:nextFocusDown="@id/player_subtitles_btt"
                             android:text="@string/next_episode"
                             android:visibility="gone"
-                            app:icon="@drawable/ic_baseline_skip_next_24"
+                            app:icon="@drawable/ic_baseline_skip_next_rounded_24"
                             tools:visibility="visible" />
 
                         <com.google.android.material.button.MaterialButton
-                            android:id="@+id/player_resize_btt"
+                            android:id="@+id/player_subtitles_btt"
                             style="@style/VideoButtonTV"
                             android:nextFocusLeft="@id/player_skip_episode"
-
-                            android:nextFocusRight="@id/player_speed_btt"
-                            android:nextFocusUp="@id/player_pause_play"
-                            android:nextFocusDown="@id/player_speed_btt"
-                            android:text="@string/video_aspect_ratio_resize"
-                            app:icon="@drawable/ic_baseline_aspect_ratio_24" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/player_speed_btt"
-                            style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_resize_btt"
-
                             android:nextFocusRight="@id/player_subtitle_offset_btt"
                             android:nextFocusUp="@id/player_pause_play"
                             android:nextFocusDown="@id/player_subtitle_offset_btt"
-                            app:icon="@drawable/ic_baseline_speed_24"
-                            tools:text="Speed" />
+                            android:text="@string/player_subtitles_settings"
+                            app:icon="@drawable/ic_player_subtitles" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/player_subtitle_offset_btt"
                             style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_speed_btt"
-                            android:nextFocusRight="@id/player_sources_btt"
-                            android:nextFocusUp="@id/player_pause_play"
-                            android:nextFocusDown="@id/player_sources_btt"
-                            android:text="@string/subtitle_offset"
-
-                            android:visibility="gone"
-                            app:icon="@drawable/ic_outline_subtitles_24"
-                            tools:visibility="visible" />
-
-                        <com.google.android.material.button.MaterialButton
-                            android:id="@+id/player_sources_btt"
-                            style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_subtitle_offset_btt"
+                            android:nextFocusLeft="@id/player_subtitles_btt"
                             android:nextFocusRight="@id/player_tracks_btt"
                             android:nextFocusUp="@id/player_pause_play"
                             android:nextFocusDown="@id/player_tracks_btt"
-
-                            android:text="@string/video_source"
-                            app:icon="@drawable/ic_baseline_playlist_play_24" />
+                            android:text="@string/subtitle_offset"
+                            android:visibility="gone"
+                            app:icon="@drawable/baseline_sync_24"
+                            tools:visibility="visible" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/player_tracks_btt"
                             style="@style/VideoButtonTV"
+                            android:nextFocusLeft="@id/player_subtitles_btt"
+                            android:nextFocusRight="@id/player_sources_btt"
+                            android:nextFocusUp="@id/player_pause_play"
+                            android:nextFocusDown="@id/player_sources_btt"
+                            android:text="@string/tracks"
+                            app:icon="@drawable/ic_player_audio_filled" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_sources_btt"
+                            style="@style/VideoButtonTV"
+                            android:nextFocusLeft="@id/player_tracks_btt"
+                            android:nextFocusRight="@id/player_episodes_btt"
+                            android:nextFocusUp="@id/player_pause_play"
+                            android:nextFocusDown="@id/player_episodes_btt"
+                            android:text="@string/video_source"
+                            app:icon="@drawable/ic_player_source" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_episodes_btt"
+                            style="@style/VideoButtonTV"
                             android:nextFocusLeft="@id/player_sources_btt"
+                            android:nextFocusRight="@id/player_speed_btt"
+                            android:nextFocusUp="@id/player_pause_play"
+                            android:nextFocusDown="@id/player_speed_btt"
+                            android:text="@string/episodes"
+                            app:icon="@drawable/ic_player_episodes" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_speed_btt"
+                            style="@style/VideoButtonTV"
+                            android:nextFocusLeft="@id/player_episodes_btt"
+                            android:nextFocusRight="@id/player_resize_btt"
+                            android:nextFocusUp="@id/player_pause_play"
+                            android:nextFocusDown="@id/player_resize_btt"
+                            app:icon="@drawable/ic_baseline_speed_24"
+                            tools:text="Speed" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_resize_btt"
+                            style="@style/VideoButtonTV"
+                            android:nextFocusLeft="@id/player_speed_btt"
+                            android:nextFocusRight="@id/player_skip_op"
+                            android:nextFocusUp="@id/player_pause_play"
+                            android:nextFocusDown="@id/player_skip_op"
+                            android:text="@string/video_aspect_ratio_resize"
+                            app:icon="@drawable/ic_player_aspect_ratio" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_open_external_btt"
+                            style="@style/VideoButtonTV"
+                            android:visibility="gone"
+                            android:text="@string/external_player"
+                            app:icon="@drawable/ic_baseline_open_in_new_24" />
+
+                        <com.google.android.material.button.MaterialButton
+                            android:id="@+id/player_skip_op"
+                            style="@style/VideoButtonTV"
+                            android:nextFocusLeft="@id/player_resize_btt"
                             android:nextFocusRight="@id/player_watch_together_btt"
                             android:nextFocusUp="@id/player_pause_play"
-                            android:text="@string/tracks"
-                            app:icon="@drawable/ic_baseline_equalizer_24" />
+                            android:nextFocusDown="@id/player_watch_together_btt"
+                            android:text="@string/video_skip_op"
+                            app:icon="@drawable/ic_baseline_fast_forward_24" />
 
                         <com.google.android.material.button.MaterialButton
                             android:id="@+id/player_watch_together_btt"
                             style="@style/VideoButtonTV"
-                            android:nextFocusLeft="@id/player_tracks_btt"
-                            android:nextFocusRight="@id/player_skip_op"
+                            android:nextFocusLeft="@id/player_skip_op"
+                            android:nextFocusRight="@id/player_skip_episode"
                             android:nextFocusUp="@id/player_pause_play"
                             android:text="@string/watch_together"
                             app:icon="@drawable/ic_baseline_people_24" />
@@ -1362,7 +1386,7 @@
                             android:visibility="gone"
                             tools:visibility="gone"
                             android:nextFocusLeft="@id/player_watch_together_btt"
-                            android:nextFocusRight="@id/player_skip_op"
+                            android:nextFocusRight="@id/player_skip_episode"
                             android:nextFocusUp="@id/player_pause_play"
                             android:text="@string/voice_call"
                             app:icon="@drawable/ic_baseline_mic_24" />
