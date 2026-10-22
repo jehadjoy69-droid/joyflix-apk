@@ -117,7 +117,7 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
             override fun onActivityStarted(activity: Activity) {}
             override fun onActivityResumed(activity: Activity) {
                 currentActivity = WeakReference(activity)
-                setContext(activity)
+                setContext(activity.applicationContext)
             }
             override fun onActivityPaused(activity: Activity) {}
             override fun onActivityStopped(activity: Activity) {}
@@ -125,7 +125,7 @@ class CloudStreamApp : Application(), SingletonImageLoader.Factory {
             override fun onActivityDestroyed(activity: Activity) {
                 if (currentActivity?.get() == activity) {
                     currentActivity = null
-                    setContext(context)
+                    setContext(context?.applicationContext ?: context)
                 }
             }
         })
