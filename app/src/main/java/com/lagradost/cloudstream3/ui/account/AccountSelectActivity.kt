@@ -87,10 +87,6 @@ class AccountSelectActivity : FragmentActivity(), BiometricCallback {
                         R.string.biometric_authentication_title,
                         false
                     )
-
-                    promptInfo?.let { prompt ->
-                        biometricPrompt?.authenticate(prompt)
-                    }
                 }
             }
         }

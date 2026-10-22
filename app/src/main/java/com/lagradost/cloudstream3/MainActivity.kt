@@ -19,14 +19,10 @@ import android.view.MenuItem
 import android.view.View
 import android.view.ViewGroup
 import android.view.WindowManager
-import android.webkit.WebView
 import android.widget.CheckBox
 import android.widget.ImageView
 import android.widget.LinearLayout
-import android.widget.TextView
 import android.widget.Toast
-import java.util.Collections
-import java.util.WeakHashMap
 import androidx.activity.result.ActivityResultLauncher
 import androidx.annotation.IdRes
 import androidx.annotation.MainThread
@@ -1242,19 +1238,10 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         super.onCreate(savedInstanceState)
 
         supportFragmentManager.registerFragmentLifecycleCallbacks(object : FragmentManager.FragmentLifecycleCallbacks() {
-            private fun dismissIfVerification(f: Fragment, fm: FragmentManager) {
+            override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
+                super.onFragmentAttached(fm, f, context)
                 val className = f.javaClass.name.lowercase()
-                val isBlockedName = className.contains("donation") ||
-                        className.contains("phisher") ||
-                        className.contains("cloudflare") ||
-                        className.contains("verify") ||
-                        className.contains("turnstile") ||
-                        className.contains("captcha") ||
-                        className.contains("solver")
-
-                val isDialogWithWebview = f is DialogFragment && f.view?.let { isVerificationView(it) } == true
-
-                if (isBlockedName || isDialogWithWebview) {
+                if (className.contains("donation") || className.contains("phisher")) {
                     try {
                         (f as? DialogFragment)?.dismissAllowingStateLoss()
                         fm.beginTransaction().remove(f).commitAllowingStateLoss()
@@ -1262,19 +1249,15 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
                 }
             }
 
-            override fun onFragmentAttached(fm: FragmentManager, f: Fragment, context: Context) {
-                super.onFragmentAttached(fm, f, context)
-                dismissIfVerification(f, fm)
-            }
-
             override fun onFragmentStarted(fm: FragmentManager, f: Fragment) {
                 super.onFragmentStarted(fm, f)
-                dismissIfVerification(f, fm)
-            }
-
-            override fun onFragmentResumed(fm: FragmentManager, f: Fragment) {
-                super.onFragmentResumed(fm, f)
-                dismissIfVerification(f, fm)
+                val className = f.javaClass.name.lowercase()
+                if (className.contains("donation") || className.contains("phisher")) {
+                    try {
+                        (f as? DialogFragment)?.dismissAllowingStateLoss()
+                        fm.beginTransaction().remove(f).commitAllowingStateLoss()
+                    } catch (_: Throwable) { }
+                }
             }
         }, true)
 
@@ -1401,10 +1384,6 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
         if (isLayout(PHONE) && isAuthEnabled(this) && noAccounts) {
             if (deviceHasPasswordPinLock(this)) {
                 startBiometricAuthentication(this, R.string.biometric_authentication_title, false)
-
-                promptInfo?.let { prompt ->
-                    biometricPrompt?.authenticate(prompt)
-                }
 
                 // hide background while authenticating, Sorry moms & dads 🙏
                 binding?.navHostFragment?.isInvisible = true
@@ -2106,122 +2085,6 @@ class MainActivity : AppCompatActivity(), ColorPickerDialogListener, BiometricCa
             ).isSuccessful
         } catch (t: Throwable) {
             false
-        }
-    }
-
-    private val safeWindowManager: WindowManager by lazy {
-        SafeWindowManager(super.getWindowManager()) { view ->
-            isVerificationView(view)
-        }
-    }
-
-    override fun getWindowManager(): WindowManager {
-        return safeWindowManager
-    }
-
-    override fun getSystemService(name: String): Any {
-        if (name == Context.WINDOW_SERVICE) {
-            return safeWindowManager
-        }
-        return super.getSystemService(name)
-    }
-
-    private fun isVerificationView(view: View): Boolean {
-        if (view == window?.decorView || view.id == R.id.homeRoot) return false
-
-        fun containsWebView(v: View): Boolean {
-            if (v is WebView) return true
-            if (v is ViewGroup) {
-                for (i in 0 until v.childCount) {
-                    if (containsWebView(v.getChildAt(i))) return true
-                }
-            }
-            return false
-        }
-
-        fun containsVerificationText(v: View): Boolean {
-            if (v is TextView) {
-                val text = v.text?.toString()?.lowercase() ?: ""
-                if (text.contains("solving cloudflare") ||
-                    text.contains("checkbox appears") ||
-                    text.contains("verifying") ||
-                    text.contains("verify you are human") ||
-                    text.contains("turnstile") ||
-                    text.contains("cloudflare")
-                ) {
-                    return true
-                }
-            }
-            if (v is ViewGroup) {
-                for (i in 0 until v.childCount) {
-                    if (containsVerificationText(v.getChildAt(i))) return true
-                }
-            }
-            return false
-        }
-
-        return containsWebView(view) || containsVerificationText(view)
-    }
-
-    private class SafeWindowManager(
-        private val delegate: WindowManager,
-        private val isBlocked: (View) -> Boolean
-    ) : WindowManager by delegate {
-        private val blockedViews = Collections.newSetFromMap(WeakHashMap<View, Boolean>())
-
-        override fun addView(view: View?, params: ViewGroup.LayoutParams?) {
-            if (view != null && isBlocked(view)) {
-                Log.i(TAG, "Blocked verification/Cloudflare dialog from being added to WindowManager.")
-                blockedViews.add(view)
-                return
-            }
-            if (view is ViewGroup) {
-                view.setOnHierarchyChangeListener(object : ViewGroup.OnHierarchyChangeListener {
-                    override fun onChildViewAdded(parent: View?, child: View?) {
-                        if (child != null && isBlocked(child)) {
-                            Log.i(TAG, "Detected verification view added dynamically, removing.")
-                            view.visibility = View.GONE
-                            blockedViews.add(view)
-                            try {
-                                delegate.removeView(view)
-                            } catch (_: Throwable) { }
-                        }
-                    }
-                    override fun onChildViewRemoved(parent: View?, child: View?) {}
-                })
-            }
-            try {
-                delegate.addView(view, params)
-            } catch (t: Throwable) {
-                logError(t)
-            }
-        }
-
-        override fun updateViewLayout(view: View?, params: ViewGroup.LayoutParams?) {
-            if (view != null && blockedViews.contains(view)) return
-            try {
-                delegate.updateViewLayout(view, params)
-            } catch (t: Throwable) {
-                logError(t)
-            }
-        }
-
-        override fun removeView(view: View?) {
-            if (view != null && blockedViews.remove(view)) return
-            try {
-                delegate.removeView(view)
-            } catch (t: Throwable) {
-                logError(t)
-            }
-        }
-
-        override fun removeViewImmediate(view: View?) {
-            if (view != null && blockedViews.remove(view)) return
-            try {
-                delegate.removeViewImmediate(view)
-            } catch (t: Throwable) {
-                logError(t)
-            }
         }
     }
 }
