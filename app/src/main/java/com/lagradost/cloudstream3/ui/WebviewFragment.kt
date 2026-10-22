@@ -21,16 +21,8 @@ class WebviewFragment : BaseFragment<FragmentWebviewBinding>(
     override fun fixLayout(view: View) = Unit
 
     override fun onBindingCreated(binding: FragmentWebviewBinding) {
-        val url = arguments?.getString(WEBVIEW_URL) ?: run {
+        val url = arguments?.getString(WEBVIEW_URL) ?: "".also {
             findNavController().popBackStack()
-            return
-        }
-
-        val lowerUrl = url.lowercase()
-        if (lowerUrl.contains("cloudflare") || lowerUrl.contains("turnstile") || lowerUrl.contains("captcha") || lowerUrl.contains("reelfren")) {
-            android.util.Log.w("WebviewFragment", "Blocked Cloudflare / verification URL in WebviewFragment: $url")
-            findNavController().popBackStack()
-            return
         }
 
         binding.webView.webViewClient = object : WebViewClient() {
