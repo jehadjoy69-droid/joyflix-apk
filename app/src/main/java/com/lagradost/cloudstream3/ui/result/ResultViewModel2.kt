@@ -1619,6 +1619,7 @@ class ResultViewModel2 : ViewModel() {
 
             ACTION_RELOAD_EPISODE -> {
                 ioSafe {
+                    com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider.forceSearchAll = true
                     loadLinks(
                         click.data,
                         isVisible = false,

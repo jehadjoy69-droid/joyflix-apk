@@ -69,6 +69,8 @@ import java.util.concurrent.CopyOnWriteArrayList
 
 class HomeViewModel : ViewModel() {
     companion object {
+        const val TMDB_PROVIDER_NAME = "JoyFlix Discover"
+
         suspend fun getResumeWatching(): List<DataStoreHelper.ResumeWatchingResult>? {
             val resumeWatching = withContext(Dispatchers.IO) {
                 getAllResumeStateIds()?.mapNotNull { id ->
@@ -292,6 +294,7 @@ class HomeViewModel : ViewModel() {
     }
 
     // returns the amount of items added and modifies current
+    // Prefers JoyFlix Discover (TMDB) items for banner — fast, reliable, great images
     private suspend fun updatePreviewResponses(
         current: MutableList<LoadResponse>,
         alreadyAdded: MutableSet<String>,
@@ -300,8 +303,13 @@ class HomeViewModel : ViewModel() {
     ): Int {
         var count = 0
 
+        // Prioritize TMDB items for banner — always fast and has proper backdrop images
+        val tmdbItems = shuffledList.filter { it.apiName == TMDB_PROVIDER_NAME && !alreadyAdded.contains(it.url) }
+        val otherItems = shuffledList.filter { it.apiName != TMDB_PROVIDER_NAME && !alreadyAdded.contains(it.url) }
+        val prioritizedList = tmdbItems + otherItems
+
         val addItems = arrayListOf<SearchResponse>()
-        for (searchResponse in shuffledList) {
+        for (searchResponse in prioritizedList) {
             if (!alreadyAdded.contains(searchResponse.url)) {
                 addItems.add(searchResponse)
                 previewResponsesAdded.add(searchResponse.url)
@@ -312,7 +320,16 @@ class HomeViewModel : ViewModel() {
         }
 
         val add = addItems.amap { searchResponse ->
-            val targetRepo = if (repo?.name == allSourcesApi.name) {
+            // Always use TMDB repo for loading banner details (faster + better metadata)
+            val targetRepo = if (searchResponse.apiName == TMDB_PROVIDER_NAME) {
+                val tmdbApi = getApiFromNameNull(TMDB_PROVIDER_NAME)
+                if (tmdbApi != null) APIRepository(tmdbApi) else {
+                    if (repo?.name == allSourcesApi.name) {
+                        val api = getApiFromNameNull(searchResponse.apiName)
+                        if (api != null) APIRepository(api) else repo
+                    } else repo
+                }
+            } else if (repo?.name == allSourcesApi.name) {
                 val api = getApiFromNameNull(searchResponse.apiName)
                 if (api != null) APIRepository(api) else repo
             } else {
@@ -376,10 +393,10 @@ class HomeViewModel : ViewModel() {
                 val allItems = mutableListOf<HomePageList>()
 
                 val prioritized = validAPIs.sortedByDescending { it is com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider }
-                val targetApis = if (prioritized.size > 10) {
+                val targetApis = if (prioritized.size > 7) {
                     val pinned = DataStoreHelper.pinnedProviders.toSet()
                     val (pinnedApis, unpinnedApis) = prioritized.partition { pinned.contains(it.name) || it is com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider }
-                    (pinnedApis + unpinnedApis).take(10)
+                    (pinnedApis + unpinnedApis).take(7)
                 } else {
                     prioritized
                 }
@@ -387,7 +404,7 @@ class HomeViewModel : ViewModel() {
                 var lastEmittedTime = 0L
                 targetApis.amap { provider ->
                     try {
-                        withTimeoutOrNull(12000L) {
+                        withTimeoutOrNull(8000L) {
                             val providerRepo = APIRepository(provider)
                             val data = providerRepo.getMainPage(1, null)
                             if (data is Resource.Success) {
@@ -416,7 +433,7 @@ class HomeViewModel : ViewModel() {
                                 }
                                 if (listItems.isNotEmpty()) {
                                     val now = System.currentTimeMillis()
-                                    if (isCold && (now - lastEmittedTime > 600L || lastEmittedTime == 0L)) {
+                                    if (isCold && (now - lastEmittedTime > 200L || lastEmittedTime == 0L)) {
                                         lastEmittedTime = now
                                         synchronized(expandable) {
                                             _page.postValue(Resource.Success(LinkedHashMap(expandable)))
@@ -445,6 +462,13 @@ class HomeViewModel : ViewModel() {
                 if (currentList.isNotEmpty()) {
                     currentShuffledList = currentList
                     _randomItems.postValue(currentList)
+                    // First emit the page content immediately so user sees something fast
+                    synchronized(expandable) {
+                        if (expandable.isNotEmpty()) {
+                            _page.postValue(Resource.Success(LinkedHashMap(expandable)))
+                        }
+                    }
+                    // Load 2 banner previews — TMDB items prioritized so load is fast
                     val size = updatePreviewResponses(
                         previewResponses,
                         previewResponsesAdded,
@@ -538,6 +562,11 @@ class HomeViewModel : ViewModel() {
                     previewResponses.clear()
                     previewResponsesAdded.clear()
 
+                    // Show page content immediately without waiting for banner previews
+                    synchronized(expandable) {
+                        _page.postValue(Resource.Success(LinkedHashMap(expandable)))
+                    }
+
                     //val home = data.value
                     if (items.isNotEmpty()) {
                         val currentList =
@@ -550,11 +579,12 @@ class HomeViewModel : ViewModel() {
                                 context?.filterSearchResultByFilmQuality(currentList.shuffled())
                                     ?: currentList.shuffled()
 
+                            // Load 2 banner previews — TMDB items prioritized so load is fast
                             updatePreviewResponses(
                                 previewResponses,
                                 previewResponsesAdded,
                                 randomItems,
-                                3
+                                2
                             )
 
                             _randomItems.postValue(randomItems)
@@ -573,9 +603,7 @@ class HomeViewModel : ViewModel() {
                     } else {
                         _preview.postValue(Resource.Success((previewResponsesAdded.size < currentShuffledList.size) to previewResponses))
                     }
-                    synchronized(expandable) {
-                        _page.postValue(Resource.Success(LinkedHashMap(expandable)))
-                    }
+                    // Page already emitted above — no need to emit again here
                 } catch (e: Exception) {
                     _randomItems.postValue(emptyList())
                     logError(e)
@@ -629,27 +657,12 @@ class HomeViewModel : ViewModel() {
     }
 
     private fun afterPluginsLoaded(forceReload: Boolean) = ioSafe {
-        delay(400)
         val currentPage = page.value
         if (!forceReload && currentPage is Resource.Success && currentPage.value.isNotEmpty()) {
             return@ioSafe
         }
-        val currentHome = DataStoreHelper.currentHomePage
-        val validAPIs = context?.filterProviderByPreferredMedia()?.filter {
-            it.hasMainPage &&
-            it.name != noneApi.name &&
-            it.name != randomApi.name &&
-            it.name != allSourcesApi.name &&
-            !it.name.contains("IPTV", ignoreCase = true) &&
-            !it.supportedTypes.all { type -> type == TvType.Live }
-        }
-        if (currentHome == null || currentHome == noneApi.name || currentHome == allSourcesApi.name || validAPIs?.none { it.name == currentHome } == true) {
-            if (!validAPIs.isNullOrEmpty()) {
-                loadAndCancel(allSourcesApi.name, forceReload, fromUI = false)
-                return@ioSafe
-            }
-        }
-        loadAndCancel(DataStoreHelper.currentHomePage ?: allSourcesApi.name, forceReload)
+        val currentHome = DataStoreHelper.currentHomePage ?: TMDB_PROVIDER_NAME
+        loadAndCancel(currentHome, forceReload)
     }
 
     private fun afterMainPluginsLoaded(unused: Boolean = false) {
@@ -658,7 +671,7 @@ class HomeViewModel : ViewModel() {
     }
 
     private fun reloadHome(unused: Boolean = false) {
-        loadAndCancel(DataStoreHelper.currentHomePage, true)
+        loadAndCancel(DataStoreHelper.currentHomePage ?: TMDB_PROVIDER_NAME, true)
     }
 
     private fun reloadAccount(unused: Boolean = false) {
@@ -677,9 +690,9 @@ class HomeViewModel : ViewModel() {
         _page.postValue(Resource.Loading())
         _preview.postValue(Resource.Loading())
 
-        if (PluginManager.loadedOnlinePlugins && !PluginManager.isSyncingPlugins) {
-            afterPluginsLoaded(false)
-        }
+        // Load TMDB / JoyFlix Discover IMMEDIATELY without waiting for plugin sync
+        val initialHome = DataStoreHelper.currentHomePage ?: TMDB_PROVIDER_NAME
+        loadAndCancel(initialHome, false)
     }
 
     override fun onCleared() {
@@ -782,16 +795,22 @@ class HomeViewModel : ViewModel() {
                     if (fromUI) DataStoreHelper.currentHomePage = apiRandom.name
                 }
             } else if (api == null) {
-                val validAPIs = context?.filterProviderByPreferredMedia()?.filter {
-                    it.hasMainPage && it.name != noneApi.name && it.name != randomApi.name && it.name != allSourcesApi.name
-                }
-                if (!validAPIs.isNullOrEmpty()) {
-                    loadAndCancel(allSourcesApi)
+                if (preferredApiName == TMDB_PROVIDER_NAME || preferredApiName == null) {
+                    val tmdb = com.lagradost.cloudstream3.APIHolder.allProviders.firstOrNull { it is com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider }
+                        ?: com.lagradost.cloudstream3.metaproviders.CrossTmdbProvider()
+                    loadAndCancel(tmdb)
                 } else {
-                    _page.postValue(Resource.Loading())
-                    _preview.postValue(Resource.Loading())
-                    if (preferredApiName != null)
-                        _apiName.postValue(preferredApiName)
+                    val validAPIs = context?.filterProviderByPreferredMedia()?.filter {
+                        it.hasMainPage && it.name != noneApi.name && it.name != randomApi.name && it.name != allSourcesApi.name
+                    }
+                    if (!validAPIs.isNullOrEmpty()) {
+                        loadAndCancel(allSourcesApi)
+                    } else {
+                        _page.postValue(Resource.Loading())
+                        _preview.postValue(Resource.Loading())
+                        if (preferredApiName != null)
+                            _apiName.postValue(preferredApiName)
+                    }
                 }
             } else {
                 // if the api is found, then set it to it and save key

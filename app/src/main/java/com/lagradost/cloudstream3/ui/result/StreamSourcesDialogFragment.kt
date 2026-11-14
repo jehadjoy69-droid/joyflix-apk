@@ -400,6 +400,8 @@ class StreamSourcesDialogFragment : DialogFragment() {
 
         scrapingJob = lifecycleScope.launch(Dispatchers.IO) {
             try {
+                // When in the sources dialog, search all scrapers so user can see and choose any source
+                CrossTmdbProvider.forceSearchAll = true
                 tempGenerator.generateLinks(
                     clearCache = true,
                     sourceTypes = LOADTYPE_ALL,

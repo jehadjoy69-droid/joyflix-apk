@@ -509,7 +509,7 @@ class CrossTmdbProvider : TmdbProvider() {
         val shouldSearchAll = forceSearchAll
         forceSearchAll = false
 
-        val preferredScraper = if (!shouldSearchAll) preferredScraperProvider?.invoke(title, tmdbId) else null
+        val preferredScraper = preferredScraperProvider?.invoke(title, tmdbId)
         val preferredApi = if (!preferredScraper.isNullOrBlank()) {
             available.firstOrNull { it.name.equals(preferredScraper, ignoreCase = true) }
         } else null
@@ -528,8 +528,8 @@ class CrossTmdbProvider : TmdbProvider() {
                 subtitleCallback = subtitleCallback,
                 wrappedCallback = wrappedCallback
             )
-            // If preferred scraper returned links, PLAY IMMEDIATELY and DO NOT query any other scraper!
-            if (linksCount > 0) {
+            // If preferred scraper returned links AND not in search-all mode, PLAY IMMEDIATELY without waiting for other scrapers
+            if (linksCount > 0 && !shouldSearchAll) {
                 return true
             }
         }
